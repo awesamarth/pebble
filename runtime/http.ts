@@ -44,7 +44,7 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/integrations/gmail/disconnect'){await integrations.disconnectGmail();return json(integrations.status());}
    if(path==='/integrations/gmail/push')return json(await integrations.gmail.handlePush(request.headers.get('authorization'),body));
    if(path==='/integrations/discord/connect')return json(await integrations.configureDiscord(body));
-   if(path==='/integrations/discord/disconnect'){integrations.disconnectDiscord();return json(integrations.status());}
+   if(path==='/integrations/discord/disconnect'){await integrations.disconnectDiscord(body.forget===true);return json(integrations.status());}
    if(path==='/integrations/draft')return json(integrations.propose(body));
    if(path==='/integrations/approve')return json(await integrations.approve(body.id,body.digest));
    if(path==='/integrations/reject')return json(integrations.reject(body.id));

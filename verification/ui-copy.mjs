@@ -3,7 +3,7 @@ const browser=await chromium.launch({headless:true,executablePath:'/Users/awesam
 const profile={name:'bunty',color:'#a9b4c8',eyes:'Dot',glasses:'None',expression:'Content'};
 await page.route('**/*',async route=>{const u=new URL(route.request().url());if(u.origin!=='http://127.0.0.1:7351')return route.abort();if(!u.pathname.startsWith('/api/runtime/'))return route.continue();const path=u.pathname.replace('/api/runtime/','');let body={};let status=200;
 if(route.request().method()==='POST')writes.push({path,body:route.request().postDataJSON()});
-if(path==='status')body={profile,provider:{state:'setup_required',method:null,model:'gpt-6-sol'},memory:{state:'setup_required',detail:'ISOLATED'},runtime:{version:'TEST',storage:'TEST'},ready:false};
+if(path==='model-settings')return route.fulfill({status:404,body:'{}'});if(path==='status')body={profile,provider:{state:'setup_required',method:null,model:'gpt-6-sol'},memory:{state:'setup_required',detail:'ISOLATED'},runtime:{version:'TEST',storage:'TEST'},ready:false};
 else if(path==='models')body=[{id:'gpt-6-sol',name:'Test model'}];
 else if(path==='events')return route.fulfill({contentType:'text/event-stream',body:'data: '+JSON.stringify({messages:[],partial:'',busy:false})+'\n\n'});
 else if(path==='integrations/status')body={gmail:{configured:false,connected:false,allowSend:false,ingestEnabled:false,contentMode:'metadata'},discord:{configured:connected,state:connected?'connected':'setup_required',botId:connected?'999':undefined,allowSend:false,guildIds:connected?['123']:[],channelIds:connected?['456']:[],mentionOnly:true,messageContent:false}};

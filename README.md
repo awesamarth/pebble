@@ -77,3 +77,5 @@ For copy-only verification of a connected workspace, build a secret-free copy in
 Model settings and activation: [model/reasoning behavior](docs/model-settings.md). Local database setup and explicit sync step: [local FalkorDB](docs/local-memory.md).
 
 Local checkpoint cadence and focused verification are recorded in [project workflow](AGENTS.md).
+
+Discord settings and opt-in secure token saving: [persistence and platform limits](docs/discord-persistence.md).

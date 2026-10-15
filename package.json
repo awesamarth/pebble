@@ -19,6 +19,7 @@
     "@earendil-works/chord": "1.2.0",
     "@earendil-works/pi-ai": "1.2.0",
     "@earendil-works/pi-durable": "1.2.0",
+    "@napi-rs/keyring": "2.1.1",
     "falkordb": "6.8.0",
     "jose": "6.2.12",
     "lucide-react": "^1.57.0",
