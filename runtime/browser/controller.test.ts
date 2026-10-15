@@ -11,3 +11,12 @@ test('genuine sandboxed visible Chromium: isolated profile, approvals, refs, tak
  const before=b.status().blockedRequests;const redirect=await b.propose({kind:'navigate',url:origin+'/two-hop'},view.revision);const outcome=await b.approve(redirect.id,redirect.digest);await Bun.sleep(200);expect(['unknown','succeeded']).toContain(outcome.state);expect(b.status().blockedRequests).toBeGreaterThan(before);expect(b.status().tabs[0].url).not.toContain(':7341');await b.stop();expect(b.status().mode).toBe('stopped');
  }finally{await b.close();fixture.stop(true);await rm(dir,{recursive:true,force:true});}
 },60000);
+
+test('hidden browsing hands the isolated profile to a window and back without reusing approvals',async()=>{
+ const fixture=server();const dir=await mkdtemp(join(tmpdir(),'pebble-handoff-proof-'));const browser=new BrowserController(dir,{testOnly:{fixtureOrigin:origin,headless:true}});
+ try{
+  expect((await browser.start()).display).toBe('hidden');const initial=await browser.resume();const navigation=await browser.propose({kind:'navigate',url:origin},initial.observation.revision);expect((await browser.approve(navigation.id,navigation.digest)).state).toBe('succeeded');const observation=await browser.observe();const pending=await browser.propose({kind:'key',key:'Tab'},observation.revision);const oldSession=browser.status().session;
+  const manual=await browser.takeover();expect(manual.mode).toBe('manual');expect(manual.display).toBe('window');expect(manual.session).not.toBe(oldSession);expect(manual.reviews.find(r=>r.id===pending.id)?.state).toBe('rejected');await expect(browser.observe()).rejects.toThrow();
+  const resumed=await browser.resume();expect(resumed.status.display).toBe('hidden');expect(resumed.observation.title).toContain('isolated browser fixture');expect(resumed.observation.revision).not.toBe(observation.revision);await expect(browser.approve(pending.id,pending.digest)).rejects.toThrow();
+ }finally{await browser.close();fixture.stop(true);await rm(dir,{recursive:true,force:true});}
+},60000);

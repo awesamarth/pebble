@@ -68,6 +68,7 @@ describe('FalkorDB adapter with isolated deterministic client', () => {
     expect(connects).toBe(2);
     expect(fake.calls[1].params.query).toHaveLength(2000);
     expect(fake.calls[1].readOnly).toBe(true);
+    await memory.recall('fact','discord:bot:guild:channel:owner');expect(fake.calls.at(-1)?.params.conversationId).toBe('discord:bot:guild:channel:owner');expect(fake.calls.at(-1)?.query).toContain('s.conversationId = $conversationId');
     await memory.close();
     await expect(memory.recall('test')).rejects.toThrow('Graph memory is unavailable');
   });

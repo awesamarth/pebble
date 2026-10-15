@@ -1,0 +1,13 @@
+import {test,expect} from 'bun:test';
+import {mkdtemp,rm} from 'node:fs/promises';import {tmpdir} from 'node:os';import {join} from 'node:path';
+import {IntegrationService} from './service';import type {DiscordSocket} from './discord';
+test('owner mentions receive one scoped reply; other authors, channels, duplicates and legacy connections do not',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'pebble-replies-'));let socket!:DiscordSocket;const sends:any[]=[];const generated:any[]=[];
+ const service=new IntegrationService(dir,async()=>{},{replyAgent:async request=>{generated.push(request);return 'A scoped conversational reply.';},discord:{setTimer:()=>0,clearTimer:()=>{},socket:()=>socket={send(){},close(){},onmessage:null,onclose:null,onerror:null},fetch:(async(input,init)=>{const url=String(input);if(url.endsWith('/gateway/bot'))return Response.json({url:'wss://gateway.discord.gg'});if(url.endsWith('/channels/20'))return Response.json({guild_id:'10'});if(url.endsWith('/messages')){sends.push(JSON.parse(String(init?.body)));return Response.json({id:String(1234+sends.length)});}throw Error('Unexpected transport');}) as typeof fetch}});
+ const packet=(t:string,d:any)=>socket.onmessage?.({data:JSON.stringify({op:0,t,d})});const ready=()=>packet('READY',{user:{id:'111'},session_id:'test',resume_gateway_url:'wss://gateway.discord.gg'});const message=(id:string,author='222',channel='20',mentioned=true)=>packet('MESSAGE_CREATE',{id,guild_id:'10',channel_id:channel,author:{id:author},mentions:mentioned?[{id:'111'}]:[],content:'hello owner channel'});
+ const settle=async()=>{for(let i=0;i<30;i++){await Bun.sleep(5);if(sends.length)break;}};
+ try{await service.configureDiscord({token:'ISOLATED_TOKEN',guildIds:['10'],channelIds:['20'],ingestEnabled:true,allowSend:true});ready();message('1');await Bun.sleep(15);expect(generated).toHaveLength(0);
+ await service.configureDiscord({token:'ISOLATED_TOKEN',guildIds:['10'],channelIds:['20'],ingestEnabled:true,allowSend:true,ownerId:'222',replyMode:'owner-mentions'});ready();message('2','333');message('3','222','21');message('4','222','20',false);message('5');message('5');await settle();expect(sends).toHaveLength(1);expect(generated).toHaveLength(1);expect(generated[0].history).toEqual([]);expect(generated[0].conversationId).toBe('discord:111:10:20:222');expect(sends[0].allowed_mentions).toEqual({parse:[]});expect(service.approvals()).toHaveLength(0);
+ message('6');for(let i=0;i<30&&sends.length<2;i++)await Bun.sleep(5);expect(sends).toHaveLength(2);expect(generated[1].history).toHaveLength(2);expect(service.status().discord.preferences?.replyMode).toBe('owner-mentions');
+ }finally{await service.close();await rm(dir,{recursive:true,force:true});}
+});

@@ -107,8 +107,8 @@ export class GraphMemory {
     const rows = await this.run(query, params);
     if (!rows.length) throw new Error('The fact source must be recorded before remembering a fact.');
   }
-  async recall(query: string): Promise<MemoryFact[]> {
-    const rows = await this.run('MATCH (f:Fact)-[:SUPPORTED_BY]->(s:Source) WHERE toLower(f.text) CONTAINS toLower($query) OPTIONAL MATCH (f)-[:ABOUT]->(p:Person) OPTIONAL MATCH (f)-[:ABOUT]->(j:Project) RETURN f.id AS id, f.text AS text, s.id AS sourceId, s.text AS sourceText, s.conversationId AS conversationId, s.role AS role, p.name AS person, j.name AS project ORDER BY f.id, s.id LIMIT 20', { query: query.trim().slice(0, 2000) }, true);
+  async recall(query: string, conversationId?: string): Promise<MemoryFact[]> {
+    const rows = await this.run('MATCH (f:Fact)-[:SUPPORTED_BY]->(s:Source) WHERE toLower(f.text) CONTAINS toLower($query) AND ($scoped = false OR s.conversationId = $conversationId) OPTIONAL MATCH (f)-[:ABOUT]->(p:Person) OPTIONAL MATCH (f)-[:ABOUT]->(j:Project) RETURN f.id AS id, f.text AS text, s.id AS sourceId, s.text AS sourceText, s.conversationId AS conversationId, s.role AS role, p.name AS person, j.name AS project ORDER BY f.id, s.id LIMIT 20', { query: query.trim().slice(0, 2000), conversationId: conversationId ?? '', scoped: conversationId !== undefined }, true);
     return rows.map(row => ({ id: String(row.id), text: String(row.text), sourceId: String(row.sourceId), sourceText: String(row.sourceText), conversationId: String(row.conversationId), role: String(row.role), person: row.person == null ? null : String(row.person), project: row.project == null ? null : String(row.project) }));
   }
   async close(): Promise<void> {
