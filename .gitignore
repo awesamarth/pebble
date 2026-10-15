@@ -1,0 +1,23 @@
+node_modules/
+.next/
+*.tsbuildinfo
+.env*
+.DS_Store
+
+.pebble/
+
+# Local state, authentication material and generated verification assets
+*.log
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.pem
+*.key
+owner.token
+auth.json
+credentials.json
+browser-profile/
+sessions/
+coverage/
+verification/*.png

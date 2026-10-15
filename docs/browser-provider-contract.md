@@ -1,0 +1,13 @@
+# Browser provider contract
+
+Verified against installed `@earendil-works/pi-ai@1.2.0`, using its actual Responses conversion/stream code and an isolated fetch implementation. No credentials, authentication flows or paid model calls are used by these tests.
+
+[Official SIWC preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations) permit function/custom tools in namespaces (or `additional_tools` inputs), and images when accepted by the selected model. Native computer use is unsupported. Our browser is application-executed function tools in the existing durable agent loop.
+
+Pi 1.2.0's `convertResponsesTools` emits flat `function` declarations. An underscore prefix alone is not a Responses namespace. `wrapBrowserProvider(openaiProvider())` wraps only `pebble_browser_*` function declarations in the `pebble_browser` namespace at payload time. Other tools remain untouched. The wrapper preserves caller payload hooks (including replacement payloads), and is installed on both `stream` and `streamSimple`. It applies to BYOK and SIWC. Tool names remain `pebble_browser_observe`, etc., so Harness dispatch remains unchanged. Pi preserves returned `ToolCall.namespace` and includes it when replaying calls to the same model.
+
+A screenshot tool result uses Pi content `{type:'image', mimeType:'image/png', data:base64}` alongside text, with base64 data excluding a data-URL prefix. The adapter converts this into `function_call_output.output` containing `input_image`, a data URL and `detail:'auto'`. Non-vision models receive an explicit omitted-image text marker. This does not enable a native computer tool and does not imply live model validation. Screenshot retention/memory policy must be enforced by Pebble independently.
+
+The current `openaiProvider` uses `https://api.openai.com/v1/responses`, including SIWC (not the legacy Codex backend). Its OAuth `toAuth` forwards the access token as API key, resulting in an Authorization bearer header. Synthetic non-`sk-` tokens exercise the adapter's SIWC detection: `store:false`, `stream:true`, omission of unsupported temperature/max-output/cache-retention fields, and no explicit system-role input. No user's existing Codex token was inspected.
+
+Run `bun test runtime/browser/provider-contract.test.ts`. These tests verify schema, screenshot conversion, SIWC/BYOK request construction, actual wire namespace grouping, upstream payload hook preservation, and returned namespaced call arguments. They prove local serialization/dispatch compatibility, not account access, model ability, or safe arbitrary web operation.

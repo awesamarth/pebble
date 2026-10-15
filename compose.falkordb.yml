@@ -1,0 +1,20 @@
+name: pebble-local
+services:
+  falkordb:
+    image: falkordb/falkordb-server@sha256:2e99eb1cfa3309ce338beebe24b5e9f44f9eb8ead6d6ef63dcaca436afbbaeec
+    container_name: pebble-falkordb
+    ports:
+      - "127.0.0.1:7380:6379"
+    environment:
+      REDIS_ARGS: "--appendonly yes --appendfsync everysec --dir /var/lib/falkordb/data"
+    volumes:
+      - pebble-falkordb-data:/var/lib/falkordb/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: "no"
+volumes:
+  pebble-falkordb-data:
+    name: pebble-falkordb-data

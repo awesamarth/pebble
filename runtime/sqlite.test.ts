@@ -1,0 +1,11 @@
+import {test,expect,describe} from 'bun:test';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {SqliteStorage} from '@earendil-works/pi-durable/storage/sqlite';
+import {createStorageConformance,createExpectAssertions} from '@earendil-works/pi-durable/testing';
+import {BACKGROUND_CONTEXT} from '@earendil-works/chord/context';
+import {BunSqlite} from './sqlite';
+const cases=createStorageConformance({assertions:createExpectAssertions(expect),withStorage:async use=>{const dir=await mkdtemp(join(tmpdir(),'pebble-conformance-'));const storage=await SqliteStorage.open(new BunSqlite(join(dir,'session.sqlite')));try{await use(storage);}finally{await storage.close(BACKGROUND_CONTEXT);await rm(dir,{recursive:true,force:true});}}});
+describe('Bun SQLite adapter · upstream Pi Durable storage conformance',()=>{for(const c of cases)test(c.name,c.run,15000);});
+test('async transactions serialize unrelated reads and roll back; handles expire',async()=>{const db=new BunSqlite(':memory:');await db.exec('CREATE TABLE items(id INTEGER)');let handle:Parameters<Parameters<BunSqlite['transaction']>[0]>[0]|undefined;const first=db.transaction(async tx=>{handle=tx;await tx.run('INSERT INTO items VALUES(1)');await Bun.sleep(20);await tx.run('INSERT INTO items VALUES(2)');});const second=db.all('SELECT * FROM items');await first;expect(await second).toEqual([{id:1},{id:2}]);await expect(handle!.run('INSERT INTO items VALUES(3)')).rejects.toThrow('expired');await expect(db.transaction(async tx=>{await tx.run('INSERT INTO items VALUES(4)');throw new Error('rollback');})).rejects.toThrow('rollback');expect(await db.all('SELECT * FROM items')).toHaveLength(2);await db.close();});

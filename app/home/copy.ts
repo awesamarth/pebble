@@ -1,0 +1,2 @@
+export function validDiscordIds(value:string){const ids=value.trim().split(/[\s,]+/).filter(Boolean);return ids.length>0&&ids.every(id=>/^\d{1,25}$/.test(id));}
+export function discordState(state:string){return ({connected:"Connected",connecting:"Connecting…",reconnecting:"Reconnecting…",disconnected:"Disconnected",error:"Needs attention",setup_required:"Not connected"} as Record<string,string>)[state]??"Checking connection…";}
