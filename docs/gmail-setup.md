@@ -24,14 +24,20 @@ Client secret, access token and refresh token are currently session-only. Reente
 
 An expired history position requires explicit **Skip the gap & resume from now**. That skips unavailable updates; pebble never silently imports the whole mailbox. This implementation is designed for new messages entering INBOX; it is not an archive importer or background polling service. Manual checks run only when requested. No Gmail connection or live mailbox test was performed by the implementation agent.
 
-## Optional push: later, not required for manual checks
+## Asking pebble to find an email
 
-The existing adapter supports Gmail watches and authenticated Pub/Sub notifications. This requires user-managed Google Cloud resources and authorized public HTTPS ingress; nothing in the local-only setup creates that exposure.
+Once Gmail is connected, bounded mailbox search/read can use the existing read-only grant. A search returns at most ten messages and does not import results, move the saved-message cursor or require an inbox-saving choice. Metadata mode still limits returned content to From/To/Subject/Date; enable full text before connecting to let reads return up to 20,000 characters of plain text. Attachments and HTML-only bodies are not read. Results are untrusted email content. Their `gmail:account:messageId` references identify Google messages, not evidence that the message has been saved to local memory. Model conversation history may retain a tool result used in that conversation.
 
-- Create a Pub/Sub topic in the same Google Cloud project, granting publisher access to `gmail-api-push@system.gserviceaccount.com`.
-- Create an authenticated push subscription and configure a service-account identity and expected audience. Its public endpoint must forward to `/api/integrations/gmail/push` without exposing the private owner API/token.
-- Fill **Topic name**, **Subscription name**, **Verified delivery address (audience)** and **Push service-account email** in advanced settings before authorizing Gmail, then use **Turn on email updates**.
-- Watches renew while the owner stays connected. This is push-triggered incremental sync, not a separate polling process.
+## Optional event-driven intake
+
+Manual checks work immediately after OAuth. Actual push additionally needs a user-approved public HTTPS endpoint; this repo creates no tunnel or Google resources.
+
+1. In the OAuth client's Google project, open Pub/Sub → Topics and create `pebble-gmail`. On that topic, grant **Pub/Sub Publisher** to `gmail-api-push@system.gserviceaccount.com`. Copy `projects/PROJECT_ID/topics/pebble-gmail`. See [Gmail push setup](https://developers.google.com/workspace/gmail/api/guides/push).
+2. Create a dedicated service account such as `pebble-gmail-push`; no JSON key is needed. Create a subscription to the topic with delivery type **Push**. Its approved public endpoint must forward only `/api/integrations/gmail/push`, preserving the Authorization header and JSON body. Do not expose `/api/runtime`, the owner port, files or development UI.
+3. Enable subscription authentication, select that service account, and set the audience to the exact public endpoint URL. The subscription creator needs `iam.serviceAccounts.actAs` on it. The Pub/Sub signing service agent `service-PROJECT_NUMBER@gcp-sa-pubsub.iam.gserviceaccount.com` needs `iam.serviceAccounts.getOpenIdToken` (for example via Service Account Token Creator). See [authenticated push permissions](https://docs.cloud.google.com/pubsub/docs/authenticate-push-subscriptions).
+4. In pebble's advanced Gmail settings enter the full topic and subscription names, identical audience, and selected push service-account email. Save and reconnect Gmail, then **Turn on email updates**. A successful watch generates an initial notification; test intake with a new INBOX message. Watches renew while the owner runs. Push is event-driven, not periodic mailbox polling.
+
+A connection/watch success alone does not prove public delivery. Verify that Incoming receives the new message; use **Check new changes** if delivery is delayed. Missing events can be recovered by manual incremental checks while history remains available. No automatic periodic fallback is currently implemented.
 
 ## Troubleshooting
 

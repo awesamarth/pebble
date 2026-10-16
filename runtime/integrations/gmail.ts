@@ -62,6 +62,46 @@ export class GmailIntegration {
     try { const profile = await this.api('/profile'); if (generation !== this.generation) throw new GmailError('session_disconnected'); this.email = String(profile.emailAddress); const restored = await this.hooks.loadCursor?.(this.email); this.historyId = cursor(restored ?? profile.historyId); await this.hooks.onCursor?.(this.historyId, this.email); } catch (e) { this.token = undefined; throw e; }
     return this.status();
   }
+  /** On-demand reads never call onEvent or change the saved history cursor. */
+  async searchMessages(query: string, max = 5) {
+    this.requireRead();
+    if (typeof query !== 'string' || !query.trim() || query.length > 500 || !Number.isInteger(max) || max < 1 || max > 10) throw new GmailError('invalid_mail_search');
+    const generation = this.generation;
+    const params = new URLSearchParams({ q: query.trim(), maxResults: String(max), includeSpamTrash: 'false' });
+    const result = await this.api(`/messages?${params}`);
+    if (generation !== this.generation) throw new GmailError('session_disconnected');
+    const ids = Array.isArray(result.messages) ? result.messages.slice(0, max).map(m => (m as {id?: unknown}).id).filter((id): id is string => typeof id === 'string') : [];
+    const messages = [];
+    for (const id of ids) {
+      try { messages.push(await this.readMessage(id)); }
+      catch (error) { if (!(error instanceof GmailError && error.code === 'gmail_http_404')) throw error; }
+      if (generation !== this.generation) throw new GmailError('session_disconnected');
+    }
+    return { account: this.email!, messages, hasMore: typeof result.nextPageToken === 'string', persisted: false as const, untrusted: true as const };
+  }
+  async readMessage(id: string) {
+    this.requireRead();
+    if (typeof id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw new GmailError('invalid_message_id');
+    const generation = this.generation;
+    const mode = this.config?.allowFullContent ? 'full' : 'metadata';
+    const message = await this.api(`/messages/${encodeURIComponent(id)}?format=${mode}${mode === 'metadata' ? '&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date' : ''}`);
+    if (generation !== this.generation) throw new GmailError('session_disconnected');
+    type Part = {mimeType?: string; filename?: string; body?: {data?: string}; parts?: Part[]; headers?: {name?: string; value?: string}[]};
+    const payload = message.payload as Part | undefined;
+    const headers = (payload?.headers ?? []).filter(h => ['from','to','subject','date'].includes(String(h.name).toLowerCase())).slice(0, 10).map(h => ({name: String(h.name).slice(0,20), value: String(h.value ?? '').slice(0,2000)}));
+    let text = ''; let visited = 0;
+    const collect = (part: Part, depth = 0) => {
+      if (depth > 8 || ++visited > 100 || text.length >= 20_000 || part.filename || part.headers?.some(h => String(h.name).toLowerCase() === 'content-disposition' && /^attachment/i.test(String(h.value)))) return;
+      if (part.mimeType === 'text/plain' && typeof part.body?.data === 'string') text += Buffer.from(part.body.data.slice(0, 40_000), 'base64url').toString('utf8').slice(0, 20_000 - text.length) + '\n';
+      for (const child of part.parts?.slice(0, 20) ?? []) collect(child, depth + 1);
+    };
+    if (mode === 'full' && payload) collect(payload);
+    return { id, threadId: typeof message.threadId === 'string' ? message.threadId : undefined, account: this.email!, reference: `gmail:${this.email}:${id}`, persisted: false as const, untrusted: true as const, contentMode: mode, headers, ...(mode === 'full' ? {text: text.slice(0,20_000), textMayBeIncomplete: true, attachmentsIncluded: false} : {}) };
+  }
+  private requireRead() {
+    if (!this.token || !this.email) throw new GmailError('gmail_connection_required');
+    if (!this.token.scopes.includes(READ)) throw new GmailError('readonly_scope_required');
+  }
   async startWatch() {
     const epoch = ++this.watchEpoch; this.timer?.(); this.timer = undefined; this.renewalAttempts = 0;
     return this.watch(epoch);

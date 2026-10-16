@@ -1,3 +1,4 @@
+import {chatBodyLimit} from './chat-images';
 import {timingSafeEqual} from 'node:crypto';
 import {Engine,SetupError} from './engine';
 import {GmailError} from './integrations/gmail';
@@ -22,8 +23,8 @@ return async (request:Request):Promise<Response>=>{
    }
   }
   if(request.method==='POST'){
-   if(Number(request.headers.get('content-length')??0)>24000)return json({error:'Request too large.'},413);
-   const raw=await request.text();if(raw.length>24000)return json({error:'Request too large.'},413);const body=raw?JSON.parse(raw):{};
+   const limit=path==='/chat'?chatBodyLimit:24000;if(Number(request.headers.get('content-length')??0)>limit)return json({error:'Request too large.'},413);
+   const raw=await request.text();if(raw.length>limit)return json({error:'Request too large.'},413);const body=raw?JSON.parse(raw):{};
    if(path==='/browser/start')return json(await engine.browser.start());
    if(path==='/browser/resume')return json(await engine.browser.resume());
    if(path==='/browser/pause')return json(await engine.browserPause('pause'));
@@ -37,6 +38,8 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/browser/screenshot'){await engine.browser.screenshot();return json(engine.browser.screenshotPreview());}
    const integrations=engine.integrations;
    if(path==='/integrations/gmail/configure')return json(integrations.configureGmail(body));
+   if(path==='/integrations/gmail/search')return json(await integrations.gmail.searchMessages(body.query,body.maxResults??5));
+   if(path==='/integrations/gmail/read')return json(await integrations.gmail.readMessage(body.id));
    if(path==='/integrations/gmail/start')return json(await integrations.gmail.beginOAuth());
    if(path==='/integrations/gmail/watch')return json(await integrations.gmail.startWatch());
    if(path==='/integrations/gmail/sync')return json(await integrations.gmail.syncHistory());
@@ -54,7 +57,7 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/provider/disconnect'){await engine.disconnect();return json(await engine.status());}
    if(path==='/oauth/start')return json(engine.startOAuth());if(path==='/oauth/complete'){engine.completeOAuth(body.value);return json({ok:true});}
    if(path==='/memory/connect')return json(await engine.connectMemory(body,body.initialize===true));if(path==='/memory/health')return json(await engine.memoryHealth());if(path==='/memory/fact')return json(await engine.remember(body));
-   if(path==='/chat')return json(await engine.send(body.content,body.requestId));if(path==='/resume'){await engine.resume();return json({ok:true});}if(path==='/abort'){await engine.abort();return json({ok:true});}
+   if(path==='/chat')return json(await engine.send(body.content,body.requestId,body.images));if(path==='/resume'){await engine.resume();return json({ok:true});}if(path==='/abort'){await engine.abort();return json({ok:true});}
   }
   return json({error:'Unknown runtime operation.'},404);
  }catch(error){if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}

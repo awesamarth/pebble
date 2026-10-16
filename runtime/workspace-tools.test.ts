@@ -12,3 +12,15 @@ test('private workspace tools gate memory writes, bound incoming content and pro
  const proposed=await call('pebble_message_draft',{provider:'discord',account:'bot',destination:'123',guildId:'456',content:'Hello'});expect(drafted).toBe(1);expect(proposed.control.terminate).toBe(true);expect(JSON.parse(proposed.output[0].text).review.state).toBe('pending');
  await call('pebble_message_draft',{provider:'discord',account:'bot',destination:'123',content:'x'.repeat(2001)});expect(drafted).toBe(1);
 });
+
+
+test('private Gmail tools pass bounded reads without writes and fail safely when disconnected',async()=>{
+ const calls:unknown[]=[];
+ const host:WorkspaceCallbacks={searchMemory:async()=>[],canRemember:()=>false,remember:async()=>{},listIncoming:async()=>[],createDraft:async()=>{},searchGmail:async(query,max)=>{calls.push([query,max]);return {messages:[],persisted:false};},readGmail:async id=>{calls.push(id);return {reference:`gmail:fixture@example.test:${id}`,contentMode:'metadata',persisted:false};}};
+ const call=async(name:string,args:unknown,callbacks=host)=>(workspaceExtension(callbacks).tools!.find(t=>t.name===name)!.execute as any)(args);
+ const search=JSON.parse((await call('pebble_gmail_search',{query:'subject:receipt'})).output[0].text);expect(search.untrusted).toBe(true);expect(search.persisted).toBe(false);expect(calls[0]).toEqual(['subject:receipt',5]);
+ expect((await call('pebble_gmail_search',{query:'x',maxResults:11})).isError).toBe(true);expect(calls).toHaveLength(1);
+ const read=JSON.parse((await call('pebble_gmail_read',{id:'abc123'})).output[0].text);expect(read.result.contentMode).toBe('metadata');expect(calls[1]).toBe('abc123');
+ expect((await call('pebble_gmail_read',{id:'../token'})).isError).toBe(true);
+ expect((await call('pebble_gmail_search',{query:'x'},{...host,searchGmail:undefined})).isError).toBe(true);
+});

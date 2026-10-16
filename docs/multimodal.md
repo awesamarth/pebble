@@ -1,0 +1,7 @@
+# Chat images
+
+`ChatImagePicker` is controlled by the private workspace composer: supply `images`, `onChange`, `disabled` while sending and `visionSupported` from the selected model's capabilities. Store attachments only in component state. Send them as the typed `ChatImageInput[]` request field and clear them after the request is accepted; preserve them after a validation/request failure so the person can retry or remove them. Do not expose attachments to Discord channel agents.
+
+PNG, JPEG and WebP are supported, with at most two attachments, 1 MiB decoded file size each and 2 MiB total. The browser checks the declared type, file signature, size and actual image decode; invalid files fail visibly. Images are not silently compressed. The server independently enforces count, decoded size, signature and image-model support before submitting typed image blocks through Pi Durable. Chat requests have a 3 MB encoded-body limit; other operations retain their smaller limits. Browser validation is convenience, not a security boundary. Retry identity includes image bytes, so the same request ID cannot silently refer to different attachments.
+
+Selected files remain in browser memory until sending or removal, with no localStorage. Sending shares the image with the configured model provider. Images may remain in the local conversation transcript; do not imply the sent attachment disappears or add it to graph memory by default. The picker creates no accounts or API requests itself.

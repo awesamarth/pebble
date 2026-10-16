@@ -67,3 +67,23 @@ test('disconnect invalidates a Gmail send awaiting approval (isolated transport)
  const attempt=f.adapter.sendApproved(Buffer.from('ISOLATED MIME').toString('base64url'),{execute:async operation=>{await gate;return operation();}});
  f.adapter.disconnect();release(undefined);await expect(attempt).rejects.toThrow('session_disconnected');expect(f.calls.filter(c=>c.endsWith('/messages/send'))).toHaveLength(0);
 });
+
+test('on-demand mailbox search/read is bounded, honors content choice and never saves messages',async()=>{
+ let imports=0;const requests:string[]=[];
+ const a=new GmailIntegration({onEvent:async()=>{imports++;},fetch:(async url=>{
+ const p=String(url);requests.push(p);
+ if(p.includes('/token'))return Response.json({access_token:'synthetic',expires_in:3600,scope:READ});
+ if(p.endsWith('/profile'))return Response.json({emailAddress:'fixture@example.test',historyId:'100'});
+ if(p.includes('/messages?'))return Response.json({messages:[{id:'abc123'}],nextPageToken:'more'});
+ return Response.json({id:'abc123',snippet:'BODY MUST NOT LEAK',payload:{mimeType:'text/plain',headers:[{name:'Subject',value:'Fixture'},{name:'X-Private',value:'omit'}],body:{data:Buffer.from('Synthetic full text').toString('base64url')}}});
+ }) as typeof fetch});
+ await expect(a.searchMessages('from:test')).rejects.toThrow('gmail_connection_required');
+ const connect=async(full:boolean)=>{a.configure({...config,allowFullContent:full,ingestEnabled:false});const {state}=await a.beginOAuth();await a.completeOAuth('synthetic',state);};
+ await connect(false);const start=a.status().historyId;
+ const result=await a.searchMessages('subject:Fixture',1);
+ expect(result.messages).toHaveLength(1);expect(result.hasMore).toBe(true);expect(result.messages[0].reference).toBe('gmail:fixture@example.test:abc123');expect(result.persisted).toBe(false);
+ expect(JSON.stringify(result)).not.toContain('BODY');expect(JSON.stringify(result)).not.toContain('Synthetic full text');expect(JSON.stringify(result)).not.toContain('X-Private');
+ await expect(a.searchMessages('x',11)).rejects.toThrow('invalid_mail_search');await expect(a.readMessage('../profile')).rejects.toThrow('invalid_message_id');
+ expect(a.status().historyId).toBe(start);expect(imports).toBe(0);
+ await connect(true);const message=await a.readMessage('abc123');expect(message.text).toContain('Synthetic full text');expect(message.attachmentsIncluded).toBe(false);expect(requests.some(p=>p.includes('format=full'))).toBe(true);expect(imports).toBe(0);a.disconnect();
+});
