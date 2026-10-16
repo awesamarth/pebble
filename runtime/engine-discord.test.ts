@@ -4,7 +4,8 @@ import {createModels,type AssistantMessage} from '@earendil-works/pi-ai';import 
 import {Engine} from './engine';import {GraphMemory} from './memory';import {defaultLook} from './contracts';import type {DiscordSocket} from './integrations/discord';
 test('Engine: owner Gateway event -> same real Harness and scoped graph memory -> bot reply, without private-web leakage',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'pebble-engine-discord-'));const base=openaiProvider();const models=createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}});const contexts:string[]=[];const graphScopes:unknown[]=[];const sends:any[]=[];const writes:Record<string,unknown>[]=[];const toolResults:any[]=[];let socket!:DiscordSocket;
- models.setProvider({...base,auth:{apiKey:{name:'synthetic',resolve:async()=>({auth:{apiKey:'synthetic'}})}},streamSimple:(model,context)=>{
+ models.setProvider({...base,auth:{apiKey:{name:'synthetic',resolve:async()=>({auth:{apiKey:'synthetic'}})}},streamSimple:(model,context,options)=>{
+  const identitySections=context.messages.flatMap(m=>m.role==='system'&&m.sections?.runtime_execution?[m.sections.runtime_execution]:[]);const identity=JSON.parse(identitySections.at(-1)!.replace(/^<runtime_execution>\n|\n<\/runtime_execution>$/g,''));expect(identity.modelId).toBe(model.id);expect(identity.provider).toBe(model.provider);expect(identity.requestedReasoning).toBe(options?.reasoning??'off');
   const serialized=JSON.stringify(context);contexts.push(serialized);const stream=createAssistantMessageEventStream();
   const results=context.messages.filter(m=>m.role==='toolResult');toolResults.push(...results);
   const privateLane=context.messages.some(m=>m.role==='system'&&m.toolsAdded?.some(t=>t.name==='pebble_private_work_memory_search'));

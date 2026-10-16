@@ -11,3 +11,9 @@ Model/reasoning preferences remain in app.sqlite. A stale or incompatible saved 
 The private web and scoped Discord Harness requests validate against current authenticated choices in production. Unsupported provider requests are rejected. Isolated tests inject static catalogs or fake authenticated catalog transports; they do not access real accounts or OS credentials. Confirmation resets on connection/settings changes and becomes verified only after a completed response.
 
 Activation needs a coordinated owner update. The connected legacy UI stays honest about secure persistence/account catalog features that are not active yet. No current session credential is extracted or migrated manually; the user performs one fresh login/save after activation. Subsequent supported credentials restore from OS storage. See [provider persistence](provider-persistence.md).
+
+## Mixed-version UI compatibility
+
+Authenticated settings do not depend on the optional `provider` field. Older running owners return valid model/reasoning choices without it; those controls remain editable. Current selection stays visible during catalog loading/errors. A compatible `/models` response can populate missing choices; if neither catalog loads, the saved selection stays visible with an explicit retry state rather than fabricated capabilities. Reasoning is hidden only when the chosen model is positively known to support only `off`. Legacy compatible lists are labeled separately from account-filtered catalogs.
+
+The model receives [trusted per-request execution context](execution-context.md) from backend-resolved agent configuration after runtime activation.

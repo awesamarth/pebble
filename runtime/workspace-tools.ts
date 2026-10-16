@@ -1,10 +1,11 @@
 import {Type} from '@earendil-works/pi-ai';
-import {defineExtension,defineTool,type ToolRegistration} from '@earendil-works/pi-durable';
+import {defineExtension,defineTool,hook,GenerationTask,type ToolRegistration} from '@earendil-works/pi-durable';
 import type {OutboundDraft} from './integrations/store';
 
 export type WorkspaceCallbacks={
  /** Deny tool execution for recovered or otherwise inactive private conversations. */
  authorize?:(conversationId:string)=>boolean;
+ stopInactive?:(conversationId:string)=>void;
  searchMemory:(query:string)=>Promise<unknown>;
  remember:(fact:{text:string;sourceId:string;person?:string;project?:string})=>Promise<unknown>;
  canRemember:()=>boolean;
@@ -30,7 +31,7 @@ export function workspaceExtension(host:WorkspaceCallbacks,namespace='pebble_wor
  const background=defineTool({name:names[6],description:'Start the current owner request as private background work. The host uses the original request unchanged; no extra instructions can be supplied. Results appear in Private work under Apps & actions. This is a bounded task, not a schedule or recurring monitor. It cannot send or approve messages.',parameters:Type.Object({},{additionalProperties:false}),replay:'unsafe',execute:()=>safe(async()=>{if(!host.startPrivateWork)throw new Error('Private work unavailable');return host.startPrivateWork();})});
  const results=defineTool({name:names[7],description:'Read the owner’s private background task status and completed results. Available only in the private web conversation. Never forward results to a shared channel without an explicit destination request and message review.',parameters:Type.Object({},{additionalProperties:false}),replay:'safe',execute:()=>safe(async()=>{if(!host.listPrivateWork)throw new Error('Private work unavailable');return {untrusted:true,tasks:await host.listPrivateWork()};})});
  const tools:ToolRegistration[]=[search,remember,incoming,draft,gmailSearch,gmailRead,...(host.startPrivateWork?[background]:[]),...(host.listPrivateWork?[results]:[])];
- return defineExtension({name:namespace,sections:host.authorize?[{key:'active_owner_task',render(input){if(!host.authorize!(String(input.conversationId)))throw new Error('This private request is no longer active.');return undefined;}}]:[],tools:tools.map(tool=>({...tool,execute:async(args,api,context)=>{
+ return defineExtension({name:namespace,hooks:host.authorize?[hook(GenerationTask,{async beforeRequest(_request,api,context){const id=String(api.conversationId);let allowed=false;try{allowed=host.authorize!(id);}catch{}if(allowed)return;try{host.stopInactive?.(id);}catch{}await new Promise<never>((_resolve,reject)=>{const stop=()=>reject(new Error('This private request is no longer active.'));if(context.abortSignal?.aborted)stop();else context.abortSignal?.addEventListener('abort',stop,{once:true});});}})]:[],tools:tools.map(tool=>({...tool,execute:async(args,api,context)=>{
   // Resolve authorization at execution time, not registration or generation time.
   // An interrupted durable conversation must not regain private tools on recovery.
   if(host.authorize){let authorized=false;try{authorized=host.authorize(String(api?.conversationId));}catch{/* Fail closed. */}if(!authorized)return {isError:true,output:[{type:'text' as const,text:'This private request is no longer active.'}]};}

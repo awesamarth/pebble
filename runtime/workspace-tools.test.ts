@@ -36,9 +36,3 @@ test('private conversation authorization denies recovered reads and drafts befor
  expect((await call('memory_search',{query:'x'})).isError).not.toBe(true);await call('message_draft',draft);expect(reads).toBe(1);expect(drafts).toBe(1);
  active.delete('active-private');expect((await call('gmail_read',{id:'abc'})).isError).toBe(true);expect((await call('message_draft',draft)).isError).toBe(true);expect(reads).toBe(1);expect(drafts).toBe(1);
 });
-
-
-test('private generation scope section rejects recovered and released requests',()=>{
- const active=new Set(['active']);const extension=workspaceExtension({authorize:id=>active.has(id),searchMemory:async()=>[],canRemember:()=>false,remember:async()=>{},listIncoming:async()=>[],createDraft:async()=>{}},'pebble_private_work');
- const render=extension.sections![0].render as any;expect(()=>render({conversationId:'recovered'})).toThrow('no longer active');expect(render({conversationId:'active'})).toBeUndefined();active.clear();expect(()=>render({conversationId:'active'})).toThrow('no longer active');
-});

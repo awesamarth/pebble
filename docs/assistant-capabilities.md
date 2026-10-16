@@ -20,7 +20,7 @@ The private web `pebble_task_start` tool and Discord `pebble_private_task` tool 
 
 Results and original requests are stored locally and exposed only through owner-authenticated `GET /work`, the existing same-origin local proxy, and the Private work panel under Apps & actions. The private web assistant can also read task results. Private results are not automatically sent back to Discord; there is no direct-message delivery integration. The owner can explicitly review a proposed outgoing message through the existing approval flow.
 
-Interrupted queued/running tasks become `unknown`; they do not replay automatically on startup. Active private-conversation bindings guard both tool execution and provider request preparation, so durable recovery cannot regain access after a binding is gone. Provider sign-out interrupts pending work. Errors are sanitized and uncertain actions are not retried. Existing immutable draft approval rules remain in force. This is a bounded executor, not a recurring scheduler, autonomous future monitor, voice engine, shell agent or general desktop controller.
+Interrupted queued/running tasks become `unknown`; they do not replay automatically on startup. Active private-conversation bindings guard tool execution and cancel inactive conversations through the pre-request hook, so durable recovery cannot regain access after a binding is gone. Provider sign-out interrupts pending work. Errors are sanitized and uncertain actions are not retried. Existing immutable draft approval rules remain in force. This is a bounded executor, not a recurring scheduler, autonomous future monitor, voice engine, shell agent or general desktop controller.
 
 ## Evidence and activation
 
