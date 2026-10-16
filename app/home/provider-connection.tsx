@@ -11,7 +11,7 @@ export default function ProviderConnection({provider,online,pending,oauth,redire
  {connected?<>
  <p role="status">{persistence?.state==='saved'&&persistence.saved?'Your connection is saved securely on this Mac.':!persistence||persistence.state==='session'?'Connected. Secure saving becomes available after the next app update; sign in again then to save this connection.':persistence.state==='error'?'Connected, but your sign-in couldn’t be saved securely. Sign in again after pebble restarts.':persistence.supported?'Connected for now. Sign in again to save this connection securely.':'Connected for now. Secure saving isn’t available on this device; sign in again after pebble restarts.'}</p>
  {persistence?.issue&&<p role="alert">{persistence.issue}</p>}
- <ModelSettings authenticated method={provider.method}/><button className="ws-signout" disabled={pending||!online} onClick={onSignOut}>Sign out</button><small>Signing out disconnects this model and removes its saved sign-in.</small>
+ <ModelSettings authenticated method={provider.method} current={{model:provider.model,reasoning:provider.reasoning}}/><button className="ws-signout" disabled={pending||!online} onClick={onSignOut}>Sign out</button><small>Signing out disconnects this model and removes its saved sign-in.</small>
  </>:<>
  <p>Sign in with ChatGPT or use your own OpenAI API key. Your connection is saved securely in this device’s credential store.</p>{!secureFlowReady&&<p role="status">{!persistence?'Secure sign-in will be available after the next local app update. Your current settings are unchanged.':'Secure connection storage is not supported on this device in this version.'}</p>}
  {persistence?.issue&&<p role="alert">{persistence.issue}</p>}
