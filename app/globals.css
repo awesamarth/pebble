@@ -29,3 +29,6 @@
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:640px){.hero-interactive{width:87%;bottom:22px}}
 @media(prefers-reduced-motion:reduce){.hero-interactive .gaze{transform:none}.hero-pull{transition:none}}
+
+/* The customizer name already has an outer field wrapper. */
+.name-input:focus-within{border-color:#7e8b70}.name-input input:focus,.name-input input:focus-visible{border:0;outline:none;box-shadow:none}.name-input:has(input:focus-visible){border-color:#596b4c;box-shadow:inset 0 0 0 1px #596b4c}

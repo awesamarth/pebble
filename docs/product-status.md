@@ -12,11 +12,11 @@ This audit distinguishes source implementation, isolated verification and live a
 | Voice calling | Landing concept only | No microphone capture, audio/realtime transport, speech pipeline or call UI. Needs a separate implementation with explicit microphone consent and an agreed provider path. |
 | Customization | Name, colors, eyes, glasses, expression, live SVG previews, local persistence | Local functional/UI checks; no generated mascot assets required. |
 | Approvals | Exact account/destination/body binding, expiring one-use actions, uncertain sends never auto-retry | Synthetic provider checks; no live consequential actions exercised here. |
-| Editable memory | Sourced facts, person/project tags, private search and owner-scoped Discord facts | No graphical editor or fact edit/delete UI yet. |
+| Editable memory | Sourced relation inspector, bounded search, explicit fact text edit/delete, provenance, person/project links and scoped Discord facts | Editor write API requires coordinated owner activation. Tags are read-only in this editor; no full-database graph visualization. Actual isolated FalkorDB edit/delete verification passes. |
 | Background work | Long-running owner, Discord intake and Gmail event handling, hidden browser while agent turn runs | No general scheduled task runner, autonomous planning queue or voice background-call engine. |
 
 ## Activation and account setup
 
-Keep the existing preview and user form intact. Runtime changes require a coordinated owner restart, which clears session-only model/Gmail/memory configuration; do not restart repeatedly during user setup. Discord Keychain reconnection follows the user's saved opt-in and scope. Reconnect the model and memory after activation. Use the exact [Gmail OAuth and Pub/Sub steps](gmail-setup.md); manual checking needs no public ingress.
+Keep the existing preview and user form intact. Runtime changes require a coordinated owner update; do not restart repeatedly during user setup. Newly saved model connections use OS credential persistence. Existing legacy session connections require one fresh login/save after adopting it. Gmail/memory configuration remains session-only. Discord Keychain reconnection follows the user's saved opt-in and scope. Reconnect memory after activation; supported saved provider credentials restore through the app. Use the exact [Gmail OAuth and Pub/Sub steps](gmail-setup.md); manual checking needs no public ingress.
 
 Do not interpret an OAuth grant, Gateway connection, successful watch or localhost HTTP 200 as live end-to-end success. Final confirmation is an owner message yielding the intended response/intake through the connected account.

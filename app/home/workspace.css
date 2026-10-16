@@ -16,3 +16,28 @@
 .ws-message-images{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.ws-message-images img{max-width:220px;max-height:180px;width:auto;height:auto;object-fit:contain;border-radius:8px;border:1px solid #d5d9cb;background:#fffef8}@media(max-width:600px){.ws-message-images img{max-width:100%;max-height:170px}}
 
 .chat-images{font-size:10px;color:#7e8773}.chat-images button{font:inherit;border:1px solid #d2d8c8;border-radius:6px;padding:7px 10px;background:#faf9f3;color:#4d5844}.chat-images button:disabled{opacity:.5;cursor:not-allowed}.chat-images small{font-size:9px;line-height:1.6}.gmail-mailbox ul{padding-left:15px}.gmail-mailbox li{margin:12px 0;overflow-wrap:anywhere}.gmail-mailbox li small{display:block}.gmail-read{padding:12px;background:#f2f1e7;border-radius:8px;overflow-wrap:anywhere}.gmail-read pre{white-space:pre-wrap;font:inherit;max-height:300px;overflow:auto}.gmail-read h3{font-size:13px}.gmail-read p{font-size:11px;line-height:1.6}
+
+.ws-memory-search{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:20px 0}.ws-memory-search label{flex:1;min-width:180px;margin:0}.ws-memory-search small{width:100%;font-size:10px;color:#7d8773}.ws-memory-search button{margin:0}
+
+/* Composite chat fields keep a single boundary: focus belongs to the wrapper. */
+.workspace .ws-composer:focus-within{border-color:#7e8b70;background:#fffef8}
+.workspace .ws-composer textarea:focus,.workspace .ws-composer textarea:focus-visible{outline:none;border:0;box-shadow:none}
+.workspace .ws-composer:has(textarea:focus-visible){border-color:#596b4c;box-shadow:inset 0 0 0 1px #596b4c}
+.workspace input:not([type=checkbox]):focus,.workspace select:focus,.workspace textarea:not(.ws-composer textarea):focus{border-color:#89967b;outline-color:#647655}
+.workspace input:not([type=checkbox]):focus-visible,.workspace select:focus-visible,.workspace textarea:not(.ws-composer textarea):focus-visible{outline:2px solid #647655;outline-offset:2px}
+
+/* Reduce nested top space; retain the existing lower padding. */
+.ws-message.user{padding-top:8px}.ws-message>span{display:block;line-height:1.2}.ws-message.user p{margin-top:6px}
+.ws-composer{align-items:center}.workspace .ws-composer textarea{height:34px;min-height:34px;line-height:20px;padding-top:4px;padding-bottom:10px}.ws-composer>button{margin-bottom:0}
+
+.workspace .ws-composer textarea{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#a8b398 transparent;scrollbar-gutter:stable}
+.workspace .ws-composer textarea::-webkit-scrollbar{width:6px}.workspace .ws-composer textarea::-webkit-scrollbar-track{background:transparent}.workspace .ws-composer textarea::-webkit-scrollbar-thumb{background:#a8b398;border-radius:99px;border:1px solid #fffef8}.workspace .ws-composer textarea::-webkit-scrollbar-thumb:hover{background:#7d8e6e}
+
+.ws-message-meta{display:flex;align-items:baseline;gap:9px;line-height:1.2;color:#7d866f}.ws-message-meta>span{font-size:8px;letter-spacing:1px}.ws-message-time{font-size:9px;font-variant-numeric:tabular-nums;line-height:1.2;color:#7d866f;letter-spacing:0}
+
+.ws-signout{display:inline-flex;align-items:center;justify-content:center;border:1px solid #bc8a80;background:#f6e9e4;color:#8b3f35;border-radius:7px;padding:10px 18px;font-family:inherit;font-size:12px;font-weight:500;line-height:1.4;margin:18px 0 10px;cursor:pointer}.ws-signout:hover:not(:disabled){background:#eed8d0;border-color:#a9695e;color:#773329}.ws-signout:focus-visible{outline:2px solid #934c43;outline-offset:3px}.ws-signout:disabled{opacity:.5;cursor:not-allowed}
+
+.ws-message.user{width:fit-content;max-width:min(85%,640px)}.ws-message.user p{margin:6px 0 0}.ws-message-meta>span{font-size:9px;letter-spacing:.5px}.ws-composer-area{flex-shrink:0}
+@media(max-width:600px){.ws-message.user{max-width:93%}}
+
+.ws-composer>button{align-self:flex-end}

@@ -107,6 +107,17 @@ export class GraphMemory {
     const rows = await this.run(query, params);
     if (!rows.length) throw new Error('The fact source must be recorded before remembering a fact.');
   }
+  async updateFact(value:{id:string;sourceId:string;expectedText:string;text:string}):Promise<void>{
+    this.validateEdit(value);if(typeof value.text!=='string'||!value.text.trim()||value.text.length>2000)throw new Error('Enter a fact under 2,000 characters.');
+    const rows=await this.run('MATCH (f:Fact {id: $id})-[:SUPPORTED_BY]->(s:Source {id: $sourceId}) WHERE f.text = $expectedText SET f.text = $text RETURN f.id AS id',{id:value.id,sourceId:value.sourceId,expectedText:value.expectedText,text:value.text.trim()});
+    if(!rows.length)throw new Error('This fact changed or is no longer available. Refresh memory before editing again.');
+  }
+  async deleteFact(value:{id:string;sourceId:string;expectedText:string}):Promise<void>{
+    this.validateEdit(value);
+    const rows=await this.run('MATCH (f:Fact {id: $id})-[:SUPPORTED_BY]->(s:Source {id: $sourceId}) WHERE f.text = $expectedText WITH f, f.id AS id DETACH DELETE f RETURN id',{id:value.id,sourceId:value.sourceId,expectedText:value.expectedText});
+    if(!rows.length)throw new Error('This fact changed or is no longer available. Refresh memory before removing it.');
+  }
+  private validateEdit(value:{id:string;sourceId:string;expectedText:string}){if(!value||typeof value.id!=='string'||!value.id||value.id.length>250||typeof value.sourceId!=='string'||!value.sourceId||value.sourceId.length>250||typeof value.expectedText!=='string'||!value.expectedText||value.expectedText.length>2000)throw new Error('Choose an existing fact and its source.');}
   async recall(query: string, conversationId?: string): Promise<MemoryFact[]> {
     const rows = await this.run('MATCH (f:Fact)-[:SUPPORTED_BY]->(s:Source) WHERE toLower(f.text) CONTAINS toLower($query) AND ($scoped = false OR s.conversationId = $conversationId) OPTIONAL MATCH (f)-[:ABOUT]->(p:Person) OPTIONAL MATCH (f)-[:ABOUT]->(j:Project) RETURN f.id AS id, f.text AS text, s.id AS sourceId, s.text AS sourceText, s.conversationId AS conversationId, s.role AS role, p.name AS person, j.name AS project ORDER BY f.id, s.id LIMIT 20', { query: query.trim().slice(0, 2000), conversationId: conversationId ?? '', scoped: conversationId !== undefined }, true);
     return rows.map(row => ({ id: String(row.id), text: String(row.text), sourceId: String(row.sourceId), sourceText: String(row.sourceText), conversationId: String(row.conversationId), role: String(row.role), person: row.person == null ? null : String(row.person), project: row.project == null ? null : String(row.project) }));
