@@ -17,3 +17,10 @@ This release does not choose arbitrary useful updates, monitor future conditions
 ## Evidence
 
 Focused tests exercise fake-clock due processing, explicit opt-in, cancellation, request deduplication, scope revocation, one-use consume, restart recovery and ambiguous delivery. A real Engine + Gateway + Pi tool + SQLite queue test drives a reminder and private-task completion all the way to an intercepted Discord POST, proves distinct nonces/exactly-once behavior, and verifies private result content never reaches the channel. Frontend checks cover exact local-time scheduling, errors, cancellation, default-off state, uncertainty, keyboard focus and mobile layout. No unsolicited live test messages were sent.
+
+
+## Conversational reply failures
+
+An eligible owner mention whose generation fails now receives one fixed human-readable failure notice if the same configured Discord destination is still connected and permitted. It uses the original event's durable reply claim and deterministic nonce. Thinking-only/empty/incomplete responses count as generation failures; valid thinking+text responses deliver only text. Nonowner/unmentioned events never receive error notices. Normal delivery failures and failure-notice delivery failures never recurse or retry; ambiguous outcomes remain unknown. A confirmed successful reply whose memory source later fails stays recorded as sent.
+
+Sanitized local records in `integrations.sqlite` → `discord_reply_diagnostics` bind source ID, stage, category, exception type, numeric HTTP status when available, elapsed time, delivery consumption and connection state. They retain at most500records and contain no raw error message, prompt, reasoning or credentials. The app also shows the actionable reply issue. Focused mocked tests verify one error notice, ignored/duplicate exclusion, normal-send failure without fallback, failed error notice without recursion, and no raw error leakage. No live failure was induced or external test message sent.

@@ -40,5 +40,11 @@ export class IntegrationStore{
  replyState(id:string,state:string,output?:string,receipt?:string){this.db.query('UPDATE discord_replies SET state=?,output=COALESCE(?,output),receipt=COALESCE(?,receipt) WHERE id=?').run(state,output??null,receipt??null,id);}
  consumeReply(id:string){return this.db.query("UPDATE discord_replies SET state='sending' WHERE id=? AND state='generating'").run(id).changes===1;}
  replyHistory(scope:string){const rows=this.db.query("SELECT input,output FROM discord_replies WHERE scope=? AND state='succeeded' ORDER BY rowid DESC LIMIT 6").all(scope) as {input:string;output:string}[];return rows.reverse().flatMap(r=>[{role:'user' as const,text:r.input},{role:'assistant' as const,text:r.output}]);}
+ /** Local structured diagnostics only: never store raw provider errors, prompts or reasoning. */
+ replyDiagnostic(sourceId:string,stage:string,code:string,details:{exceptionType:string;httpStatus?:number;elapsedMs:number;deliveryConsumed:boolean;connected:boolean}){
+  this.db.exec('CREATE TABLE IF NOT EXISTS discord_reply_diagnostics(id TEXT PRIMARY KEY,source_id TEXT NOT NULL,stage TEXT NOT NULL,code TEXT NOT NULL,details TEXT NOT NULL,created INTEGER NOT NULL)');
+  this.db.query('INSERT INTO discord_reply_diagnostics(id,source_id,stage,code,details,created) VALUES(?,?,?,?,?,?)').run(randomUUID(),sourceId,stage,code,JSON.stringify(details),this.now());
+  this.db.query('DELETE FROM discord_reply_diagnostics WHERE rowid NOT IN (SELECT rowid FROM discord_reply_diagnostics ORDER BY rowid DESC LIMIT 500)').run();
+ }
  close(){this.db.close();}
 }
