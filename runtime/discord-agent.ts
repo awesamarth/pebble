@@ -22,7 +22,9 @@ export async function replyToDiscord(harness:Harness,request:DiscordReplyRequest
    const submission=await conversation.submit({type:'input',requestId:request.sourceId,whenBusy:'reject',content:JSON.stringify({sameChannelOwnerHistory:history,sameChannelUntrustedFacts:JSON.parse(memories),hostMemoryStatus:request.memoryNotice??'No memory operation was confirmed.',currentOwnerMessage:request.text})},ctx);
    const result=await submission.wait(ctx);if(result.status!=='done')throw new Error('Discord reply did not finish.');
    const view=await conversation.context(ctx);const assistant=view.entries.flatMap(entry=>entry.model??[]).filter(message=>message.role==='assistant').at(-1);
-   if(!assistant||assistant.role!=='assistant'||assistant.stopReason!=='stop'||!Array.isArray(assistant.content)||assistant.content.some(block=>block.type!=='text'))throw new Error('Discord reply was not a completed text response.');
+   if(!assistant||assistant.role!=='assistant'||assistant.stopReason!=='stop'||!Array.isArray(assistant.content)||assistant.content.some(block=>block.type!=='text'&&block.type!=='thinking'))throw new Error('Discord reply was not a completed text response.');
+   // A reasoning model may return metadata beside its final text. Validate completion,
+   // discard thinking blocks, and deliver only public text; never expose reasoning.
    const text=assistant.content.map(block=>block.type==='text'?block.text:'').join('').trim();if(!text)throw new Error('Discord reply was empty.');return text.slice(0,1800);
   };
   return await Promise.race([work(),cancelled]);
