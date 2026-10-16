@@ -38,3 +38,48 @@ test('real Harness remembers a natural preference with its current user source a
   expect(writes).toHaveLength(1);expect(results).toEqual([false,true,true,true,true]);
  }finally{await engine.close();await rm(directory,{recursive:true,force:true});}
 },15000);
+
+test('passwordless graph connection is restored after Engine restart while graph data stays external',async()=>{
+ const {Database}=await import('bun:sqlite');
+ const directory=await mkdtemp(join(tmpdir(),'pebble-memory-restart-'));
+ const config={host:'synthetic.invalid',port:7380,tls:false,graph:'synthetic_restart_fixture'};
+ const connections:Array<typeof config>=[];
+ const externalFact={id:'synthetic:f',text:'Mira builds Lantern',sourceId:'synthetic:s',sourceText:'Mira builds Lantern',conversationId:'synthetic:c',role:'user',person:'Mira',project:'Lantern'};
+ const factory=(value:typeof config)=>{connections.push({...value});return new GraphMemory(value,async()=>({run:async query=>query==='RETURN 1 AS ok'?[{ok:1}]:query.includes('RETURN DISTINCT f.id')?[externalFact]:[],close:async()=>{}}));};
+ const models=()=>createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}});
+ let engine=await Engine.open(directory,models(),factory);
+ try{
+  expect((await engine.status()).memory.state).toBe('setup_required');
+  await engine.connectMemory(config);
+  expect(await engine.facts('')).toEqual([externalFact]);
+  await engine.close();
+  const db=new Database(join(directory,'app.sqlite'),{readonly:true});
+  try{const row=db.query("SELECT value FROM settings WHERE key='memoryConnection'").get() as {value:string};expect(JSON.parse(row.value)).toEqual(config);}finally{db.close();}
+  engine=await Engine.open(directory,models(),factory);
+  expect(connections).toEqual([config,config]);
+  expect((await engine.status()).memory.state).toBe('connected');
+  expect(await engine.facts('')).toEqual([externalFact]);
+ }finally{await engine.close();await rm(directory,{recursive:true,force:true});}
+});
+
+test('password-bearing graph connection remains session-only and clears previously saved connection',async()=>{
+ const {Database}=await import('bun:sqlite');
+ const directory=await mkdtemp(join(tmpdir(),'pebble-memory-session-'));
+ const config={host:'synthetic.invalid',port:7380,tls:false,graph:'synthetic_session_fixture'};
+ let connects=0;
+ const factory=(value:typeof config)=>{connects++;return new GraphMemory(value,async()=>({run:async query=>query==='RETURN 1 AS ok'?[{ok:1}]:[],close:async()=>{}}));};
+ const models=()=>createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}});
+ let engine=await Engine.open(directory,models(),factory);
+ try{
+  await engine.connectMemory(config);
+  const password='synthetic-session-only-value';
+  await engine.connectMemory({...config,password});
+  expect((await engine.status()).memory.state).toBe('connected');
+  await engine.close();
+  const db=new Database(join(directory,'app.sqlite'),{readonly:true});
+  try{const row=db.query("SELECT value FROM settings WHERE key='memoryConnection'").get() as {value:string}|null;expect(row?.value.includes(password)??false).toBe(false);expect(row===null||JSON.parse(row.value)===null).toBe(true);}finally{db.close();}
+  engine=await Engine.open(directory,models(),factory);
+  expect(connects).toBe(2);
+  expect((await engine.status()).memory.state).toBe('setup_required');
+ }finally{await engine.close();await rm(directory,{recursive:true,force:true});}
+});

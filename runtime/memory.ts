@@ -5,7 +5,7 @@ import { pushQueryArguments } from 'falkordb/dist/src/commands';
 export type GraphMemoryConfig = { host: string; port: number; username?: string; password?: string; tls: boolean; graph: string };
 export type MessageSource = { id: string; conversationId: string; role: string; text: string };
 export type RememberFact = { id: string; text: string; sourceId: string; person?: string; project?: string };
-export type MemoryFact = { id: string; text: string; sourceId: string; sourceText: string; conversationId: string; role: string; person: string | null; project: string | null };
+export type MemoryFact = { id: string; text: string; sourceId: string; sourceText: string; conversationId: string; role: string; person: string | null; project: string | null; relatedTo?: string };
 export type MemoryHealth = { status: 'ready' | 'unavailable' | 'setup_required'; message: string };
 type Params = Record<string, string | number | boolean | null>;
 export interface GraphConnection {
@@ -99,8 +99,11 @@ export class GraphMemory {
   }
   async rememberFact(fact: RememberFact): Promise<void> {
     if (!fact.id.trim() || !fact.text.trim() || !fact.sourceId.trim()) throw new Error('A fact needs an id, text and source.');
-    const params: Params = { id: fact.id, text: fact.text, sourceId: fact.sourceId };
-    let query = 'MATCH (s:Source {id: $sourceId}) MERGE (f:Fact {id: $id}) SET f.text = $text MERGE (f)-[:SUPPORTED_BY]->(s)';
+    for (const entity of [fact.person, fact.project]) {
+      if (entity && (entity.trim().length > 150 || !fact.text.toLowerCase().includes(entity.trim().toLowerCase()))) throw new Error('Entity names must appear in the remembered fact.');
+    }
+    const params: Params = { id: fact.id, text: fact.text, sourceId: fact.sourceId, personName: fact.person?.trim().toLowerCase() ?? '', projectName: fact.project?.trim().toLowerCase() ?? '' };
+    let query = 'MATCH (s:Source {id: $sourceId}) WHERE ($personName = "" OR toLower(s.text) CONTAINS $personName) AND ($projectName = "" OR toLower(s.text) CONTAINS $projectName) MERGE (f:Fact {id: $id}) SET f.text = $text WITH f,s OPTIONAL MATCH (f)-[old:ABOUT]->() DELETE old WITH DISTINCT f,s MERGE (f)-[:SUPPORTED_BY]->(s)';
     if (fact.person?.trim()) { params.person = fact.person.trim(); params.personId = memoryEntityId('person', fact.person); query += ' MERGE (p:Person {id: $personId}) SET p.name = $person MERGE (f)-[:ABOUT]->(p)'; }
     if (fact.project?.trim()) { params.project = fact.project.trim(); params.projectId = memoryEntityId('project', fact.project); query += ' MERGE (j:Project {id: $projectId}) SET j.name = $project MERGE (f)-[:ABOUT]->(j)'; }
     query += ' RETURN f.id AS id';
@@ -109,7 +112,7 @@ export class GraphMemory {
   }
   async updateFact(value:{id:string;sourceId:string;expectedText:string;text:string}):Promise<void>{
     this.validateEdit(value);if(typeof value.text!=='string'||!value.text.trim()||value.text.length>2000)throw new Error('Enter a fact under 2,000 characters.');
-    const rows=await this.run('MATCH (f:Fact {id: $id})-[:SUPPORTED_BY]->(s:Source {id: $sourceId}) WHERE f.text = $expectedText SET f.text = $text RETURN f.id AS id',{id:value.id,sourceId:value.sourceId,expectedText:value.expectedText,text:value.text.trim()});
+    const rows=await this.run('MATCH (f:Fact {id: $id})-[:SUPPORTED_BY]->(s:Source {id: $sourceId}) WHERE f.text = $expectedText SET f.text = $text WITH f OPTIONAL MATCH (f)-[r:ABOUT]->(entity) WHERE NOT toLower($text) CONTAINS toLower(entity.name) DELETE r RETURN DISTINCT f.id AS id',{id:value.id,sourceId:value.sourceId,expectedText:value.expectedText,text:value.text.trim()});
     if(!rows.length)throw new Error('This fact changed or is no longer available. Refresh memory before editing again.');
   }
   async deleteFact(value:{id:string;sourceId:string;expectedText:string}):Promise<void>{
@@ -119,8 +122,20 @@ export class GraphMemory {
   }
   private validateEdit(value:{id:string;sourceId:string;expectedText:string}){if(!value||typeof value.id!=='string'||!value.id||value.id.length>250||typeof value.sourceId!=='string'||!value.sourceId||value.sourceId.length>250||typeof value.expectedText!=='string'||!value.expectedText||value.expectedText.length>2000)throw new Error('Choose an existing fact and its source.');}
   async recall(query: string, conversationId?: string): Promise<MemoryFact[]> {
-    const rows = await this.run('MATCH (f:Fact)-[:SUPPORTED_BY]->(s:Source) WHERE toLower(f.text) CONTAINS toLower($query) AND ($scoped = false OR s.conversationId = $conversationId) OPTIONAL MATCH (f)-[:ABOUT]->(p:Person) OPTIONAL MATCH (f)-[:ABOUT]->(j:Project) RETURN f.id AS id, f.text AS text, s.id AS sourceId, s.text AS sourceText, s.conversationId AS conversationId, s.role AS role, p.name AS person, j.name AS project ORDER BY f.id, s.id LIMIT 20', { query: query.trim().slice(0, 2000), conversationId: conversationId ?? '', scoped: conversationId !== undefined }, true);
-    return rows.map(row => ({ id: String(row.id), text: String(row.text), sourceId: String(row.sourceId), sourceText: String(row.sourceText), conversationId: String(row.conversationId), role: String(row.role), person: row.person == null ? null : String(row.person), project: row.project == null ? null : String(row.project) }));
+    const params: Params = { query: query.trim().slice(0, 2000), conversationId: conversationId ?? '', scoped: conversationId !== undefined };
+    const columns = 'f.id AS id, f.text AS text, s.id AS sourceId, s.text AS sourceText, s.conversationId AS conversationId, s.role AS role, p.name AS person, j.name AS project';
+    const rows = await this.run(`MATCH (f:Fact)-[:SUPPORTED_BY]->(s:Source) OPTIONAL MATCH (f)-[:ABOUT]->(p:Person) OPTIONAL MATCH (f)-[:ABOUT]->(j:Project) WITH f,s,p,j WHERE ($scoped = false OR s.conversationId = $conversationId) AND ($query = "" OR toLower(f.text) CONTAINS toLower($query) OR toLower($query) CONTAINS toLower(p.name) OR toLower($query) CONTAINS toLower(j.name)) RETURN DISTINCT ${columns} ORDER BY f.id, s.id LIMIT 20`, params, true);
+    // One bounded graph hop supplies context that a text match alone cannot find.
+    // Both ends are scoped, so a shared person/project never crosses a Discord boundary.
+    if (params.query && rows.length && rows.length < 20) {
+      const seedParams: Params = {...params};
+      const seeds = [...new Set(rows.map(row => String(row.id)))].slice(0, 8);
+      const conditions = seeds.map((id,i) => { seedParams[`seed${i}`]=id; return `seed.id = $seed${i}`; }).join(' OR ');
+      const related = await this.run(`MATCH (seed:Fact)-[:SUPPORTED_BY]->(origin:Source), (seed)-[:ABOUT]->(entity)<-[:ABOUT]-(f:Fact)-[:SUPPORTED_BY]->(s:Source) WHERE (${conditions}) AND seed.id <> f.id AND ($scoped = false OR (s.conversationId = $conversationId AND origin.conversationId = $conversationId)) OPTIONAL MATCH (f)-[:ABOUT]->(p:Person) OPTIONAL MATCH (f)-[:ABOUT]->(j:Project) RETURN DISTINCT ${columns}, entity.name AS relatedTo ORDER BY f.id, s.id LIMIT 20`,seedParams,true);
+      const seen=new Set(rows.map(row=>`${row.id}:${row.sourceId}`));
+      for(const row of related) {const key=`${row.id}:${row.sourceId}`;if(!seen.has(key)&&rows.length<20){rows.push(row);seen.add(key);}}
+    }
+    return rows.map(row => ({ id: String(row.id), text: String(row.text), sourceId: String(row.sourceId), sourceText: String(row.sourceText), conversationId: String(row.conversationId), role: String(row.role), person: row.person == null ? null : String(row.person), project: row.project == null ? null : String(row.project), ...(row.relatedTo ? {relatedTo:String(row.relatedTo)} : {}) }));
   }
   async close(): Promise<void> {
     this.closed = true;

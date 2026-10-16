@@ -89,3 +89,10 @@ test('real connection failure returns unavailable, with no invented graph fallba
  const memory=new GraphMemory({host:'127.0.0.1',port:1,tls:false,graph:'isolated_unavailable_test'});
  try{expect((await memory.health()).status).toBe('unavailable');await expect(memory.recall('anything')).rejects.toThrow('unavailable');}finally{await memory.close();}
 },12000);
+
+
+test('entity labels cannot introduce names absent from a grounded fact',async()=>{
+ const fake=isolatedGraphDouble();const memory=new GraphMemory(config,async()=>fake.connection);
+ await expect(memory.rememberFact({id:'f',sourceId:'s',text:'Mira prefers quiet mornings.',person:'Invented'})).rejects.toThrow('Entity names');
+ expect(fake.calls).toHaveLength(0);
+});

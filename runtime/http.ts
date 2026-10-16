@@ -1,3 +1,4 @@
+import {LocalAccessError} from './local-access';
 import {chatBodyLimit} from './chat-images';
 import {timingSafeEqual} from 'node:crypto';
 import {Engine,SetupError} from './engine';
@@ -12,6 +13,7 @@ return async (request:Request):Promise<Response>=>{
  try{
   if(request.method==='GET'){
    if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
+   if(path==='/local-access')return json(engine.local.status());
    if(path==='/providers')return json(await engine.providerCatalog());
    if(path==='/work')return json({tasks:engine.privateWorkItems()});
    if(path==='/integrations/status')return json(engine.integrations.status());if(path==='/integrations/events')return json(await engine.integrations.refreshSources());if(path==='/integrations/approvals')return json(engine.integrations.approvals());
@@ -27,6 +29,10 @@ return async (request:Request):Promise<Response>=>{
   if(request.method==='POST'){
    const limit=path==='/chat'?chatBodyLimit:24000;if(Number(request.headers.get('content-length')??0)>limit)return json({error:'Request too large.'},413);
    const raw=await request.text();if(raw.length>limit)return json({error:'Request too large.'},413);const body=raw?JSON.parse(raw):{};
+   if(path==='/local-access/grant')return json(await engine.local.grant(body));
+   if(path==='/local-access/revoke')return json(engine.local.revoke(body.id));
+   if(path==='/local-access/approve')return json(engine.local.approve(body.id));
+   if(path==='/local-access/reject')return json(engine.local.reject(body.id));
    if(path==='/browser/start')return json(await engine.browser.start());
    if(path==='/browser/resume')return json(await engine.browser.resume());
    if(path==='/browser/pause')return json(await engine.browserPause('pause'));
@@ -64,6 +70,6 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/chat')return json(await engine.send(body.content,body.requestId,body.images));if(path==='/resume'){await engine.resume();return json({ok:true});}if(path==='/abort'){await engine.abort();return json({ok:true});}
   }
   return json({error:'Unknown runtime operation.'},404);
- }catch(error){if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}
+ }catch(error){if(error instanceof LocalAccessError)return json({error:error.message},409);if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}
 };
 }
