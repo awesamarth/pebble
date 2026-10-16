@@ -11,7 +11,7 @@ export class PrivateWorkQueue{
  private closed=false;
  private active?:{id:string;controller:AbortController};
  private draining?:Promise<void>;
- constructor(private db:Database,private execute:(request:Readonly<PrivateWorkRequest>,signal:AbortSignal)=>Promise<string>,private now=Date.now){
+ constructor(private db:Database,private execute:(request:Readonly<PrivateWorkRequest>,signal:AbortSignal)=>Promise<string>,private now=Date.now,private onCompleted?:(request:Readonly<PrivateWorkRequest>)=>Promise<void>|void){
   db.exec('CREATE TABLE IF NOT EXISTS private_work(id TEXT PRIMARY KEY,source_id TEXT UNIQUE NOT NULL,scope TEXT NOT NULL,request TEXT NOT NULL,state TEXT NOT NULL,created INTEGER NOT NULL,updated INTEGER NOT NULL,result TEXT,issue TEXT)');
   db.query("UPDATE private_work SET state='unknown',updated=?,issue='Interrupted before completion. Review before trying again.' WHERE state IN ('queued','running')").run(now());
  }
@@ -51,7 +51,8 @@ export class PrivateWorkQueue{
     const result=await this.execute(Object.freeze({sourceId:row.source_id,scope:row.scope,request:row.request}),controller.signal);
     if(!controller.signal.aborted&&!this.closed){
      if(typeof result!=='string'||!result.trim())throw new Error('Missing result');
-     this.db.query("UPDATE private_work SET state='completed',result=?,updated=? WHERE id=? AND state='running'").run(result.slice(0,30000),this.now(),row.id);
+     const completed=this.db.query("UPDATE private_work SET state='completed',result=?,updated=? WHERE id=? AND state='running'").run(result.slice(0,30000),this.now(),row.id);
+     if(completed.changes===1){try{await this.onCompleted?.(Object.freeze({sourceId:row.source_id,scope:row.scope,request:row.request}));}catch{/* Notification failure must not erase a completed private result. */}}
     }
    }catch{
     if(!this.closed&&!controller.signal.aborted)this.db.query("UPDATE private_work SET state='failed',issue='This task could not be completed. Review it privately before trying again.',updated=? WHERE id=? AND state='running'").run(this.now(),row.id);

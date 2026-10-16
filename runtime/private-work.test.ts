@@ -28,3 +28,8 @@ test('executor failures are sanitized and startup marks persisted unfinished wor
  db.query("INSERT INTO private_work(id,source_id,scope,request,state,created,updated) VALUES('interrupted','interrupted','channel','private task','running',1,1)").run();
  const reopened=new PrivateWorkQueue(db,async()=>{throw new Error('must not run');});expect(reopened.listOwner().find(item=>item.id==='interrupted')?.state).toBe('unknown');await reopened.close();db.close();
 });
+
+test('completion callback receives only immutable original request once, and notification failure preserves result',async()=>{
+ const db=new Database(':memory:');const seen:unknown[]=[];const queue=new PrivateWorkQueue(db,async()=> 'private result',Date.now,async request=>{expect(Object.isFrozen(request)).toBe(true);seen.push(request);throw new Error('notification unavailable');});
+ const request={sourceId:'synthetic-complete',scope:'discord:fixture',request:'Check synthetic fixture and ping me when done'};queue.enqueue(request);await tick();queue.enqueue(request);await tick();expect(seen).toEqual([request]);expect(queue.listOwner()[0].state).toBe('completed');expect(queue.listOwner()[0].result).toBe('private result');await queue.close();db.close();
+});

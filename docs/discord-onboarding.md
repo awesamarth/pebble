@@ -1,0 +1,12 @@
+# Guided local Discord setup
+
+Apps & actions now leads with a guided bot setup; manual IDs remain under Advanced. Existing connected/saved setups remain intact unless the owner confirms a replacement.
+
+1. Open https://discord.com/developers/applications?new_application=true and copy the character name from pebble. Discord does not support a name-prefill parameter here.
+2. Enter the bot token locally. The owner API fetches `/applications/@me` and `/users/@me`, validates the bot/app identity, and creates the Add to Discord URL with bot + applications.commands scopes and View Channel/Send Messages permissions. Discovery stores the token in memory only and does not replace the active connection.
+3. Explicitly start pairing. This upserts only the `/pebble-pair` global command, never bulk-replaces commands. A separate Gateway session with zero message intents receives interactions only. Run the command with the random128-bit code in the desired server channel, from your own Discord account.
+4. Return to pebble and review the actual invoking account/server/channel. Nothing changes before local confirmation. Confirmation revalidates bot, app, member and channel through Discord, checks the setup generation, and connects only that scope. Optional Keychain saving also opts into reconnecting that same saved setup.
+
+Pairing is memory-only, expires after10minutes, consumes the first valid candidate once and rejects stale IDs/replay. Expiry/error discards the token; start setup again and re-enter it. Existing connection changes invalidate pending pairing. The local owner API authenticates all configuration actions. Tokens, pairing codes and interaction credentials are not logged or persisted. Only the ephemeral response to a user-invoked setup command is sent; setup creates no conversational posts. Global command propagation can require waiting/reopening the command picker. An existing Interactions Endpoint URL must be removed to use this local Gateway flow. No public server, hosted relay or OS setting changes are introduced.
+
+Tests use intercepted Discord HTTP/Gateway fixtures, including token discovery, no message intake during pairing, expiry, wrong/replayed requests, exact local confirmation, channel/member revalidation, cancellation and preserved existing setup. Desktop/mobile UI checks mock every runtime API; no live registration or token changes were performed during implementation.

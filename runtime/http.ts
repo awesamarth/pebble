@@ -1,3 +1,5 @@
+import {DiscordOnboardingError} from './integrations/discord-onboarding';
+import {NotificationRequestError} from './discord-notifications';
 import {LocalAccessError} from './local-access';
 import {chatBodyLimit} from './chat-images';
 import {timingSafeEqual} from 'node:crypto';
@@ -13,9 +15,11 @@ return async (request:Request):Promise<Response>=>{
  try{
   if(request.method==='GET'){
    if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
+   if(path==='/notifications')return json(engine.notificationStatus());
    if(path==='/local-access')return json(engine.local.status());
    if(path==='/providers')return json(await engine.providerCatalog());
    if(path==='/work')return json({tasks:engine.privateWorkItems()});
+   if(path==='/integrations/discord/pair')return json(engine.integrations.discordPairState(new URL(request.url).searchParams.get('setupId')??undefined));
    if(path==='/integrations/status')return json(engine.integrations.status());if(path==='/integrations/events')return json(await engine.integrations.refreshSources());if(path==='/integrations/approvals')return json(engine.integrations.approvals());
    if(path==='/integrations/gmail/callback'){const q=new URL(request.url).searchParams;await engine.integrations.gmail.completeOAuth(q.get('code')??'',q.get('state')??'');return json({ok:true});}
    if(path==='/model-settings')return json(await engine.generationView());if(path==='/status')return json(await engine.status());if(path==='/history')return json(engine.snapshot());if(path==='/models')return json(await engine.activeModelChoices());if(path==='/oauth')return json(engine.oauth);if(path==='/memory')return json(await engine.facts(new URL(request.url).searchParams.get('q')??''));
@@ -29,6 +33,9 @@ return async (request:Request):Promise<Response>=>{
   if(request.method==='POST'){
    const limit=path==='/chat'?chatBodyLimit:24000;if(Number(request.headers.get('content-length')??0)>limit)return json({error:'Request too large.'},413);
    const raw=await request.text();if(raw.length>limit)return json({error:'Request too large.'},413);const body=raw?JSON.parse(raw):{};
+   if(path==='/notifications/settings'){if(typeof body.enabled!=='boolean')throw new NotificationRequestError('Choose whether requested Discord updates are enabled.');engine.notifications.setEnabled(body.enabled);return json(engine.notificationStatus());}
+   if(path==='/notifications/schedule')return json(engine.scheduleNotification(body));
+   if(path==='/notifications/cancel')return json(engine.notifications.cancel(body.id));
    if(path==='/local-access/grant')return json(await engine.local.grant(body));
    if(path==='/local-access/revoke')return json(engine.local.revoke(body.id));
    if(path==='/local-access/approve')return json(engine.local.approve(body.id));
@@ -54,6 +61,10 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/integrations/gmail/recover')return json(await integrations.gmail.resumeFromNow(body.consent===true));
    if(path==='/integrations/gmail/disconnect'){await integrations.disconnectGmail();return json(integrations.status());}
    if(path==='/integrations/gmail/push')return json(await integrations.gmail.handlePush(request.headers.get('authorization'),body));
+   if(path==='/integrations/discord/discover')return json(await integrations.discoverDiscord(body.token));
+   if(path==='/integrations/discord/pair/start')return json(await integrations.startDiscordPair(body.setupId));
+   if(path==='/integrations/discord/pair/confirm')return json(await integrations.confirmDiscordPair(body));
+   if(path==='/integrations/discord/pair/cancel')return json(integrations.cancelDiscordPair(body.setupId));
    if(path==='/integrations/discord/connect')return json(await integrations.configureDiscord(body));
    if(path==='/integrations/discord/disconnect'){await integrations.disconnectDiscord(body.forget===true);return json(integrations.status());}
    if(path==='/integrations/draft')return json(integrations.propose(body));
@@ -70,6 +81,6 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/chat')return json(await engine.send(body.content,body.requestId,body.images));if(path==='/resume'){await engine.resume();return json({ok:true});}if(path==='/abort'){await engine.abort();return json({ok:true});}
   }
   return json({error:'Unknown runtime operation.'},404);
- }catch(error){if(error instanceof LocalAccessError)return json({error:error.message},409);if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}
+ }catch(error){if(error instanceof DiscordOnboardingError||error instanceof NotificationRequestError)return json({error:error.message},409);if(error instanceof LocalAccessError)return json({error:error.message},409);if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}
 };
 }

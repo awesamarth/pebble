@@ -39,7 +39,7 @@ export default function PrivateWork(){
  },[refresh]);
  return <section className="private-work" aria-labelledby="private-work-title">
   <div className="private-work-heading"><div><span className="eyebrow">JUST FOR YOU</span><h2 id="private-work-title"><LockKeyhole size={18} aria-hidden="true"/>Private work</h2></div><button className="ws-text-button" disabled={refreshing} onClick={()=>void refresh()}><RefreshCw size={13} aria-hidden="true"/>{refreshing?'Refreshing…':'Refresh'}</button></div>
-  <p className="private-work-intro">Private tasks started in chat or Discord appear here. Their results stay in your workspace; this panel doesn’t send them to a channel. Messages that need your approval appear in Review & send.</p>
+  <p className="private-work-intro">Private tasks started in chat or Discord appear here. Their results stay in your workspace. If you ask for a completion notice and enable Discord updates below, pebble can post a short notice without the private result. Messages that need your approval appear in Review & send.</p>
   {error&&<p className="private-work-error" role="alert">{error}{loaded?' Previously loaded tasks are shown below.':''}</p>}
   {!loaded&&!error&&<p className="private-work-empty" role="status">Checking your private work…</p>}
   {loaded&&!tasks.length&&<p className="private-work-empty">No private tasks yet. Ask your pebble to work on a task in the background, then check back here.</p>}

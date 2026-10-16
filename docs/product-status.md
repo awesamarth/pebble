@@ -13,7 +13,7 @@ This audit distinguishes source implementation, isolated verification and live a
 | Customization | Name, colors, eyes, glasses, expression, live SVG previews, local persistence | Local functional/UI checks; no generated mascot assets required. |
 | Approvals | Exact account/destination/body binding, expiring one-use actions, uncertain sends never auto-retry | Synthetic provider checks; no live consequential actions exercised here. |
 | Editable memory | Sourced relation inspector, bounded search, explicit fact text edit/delete, provenance, person/project links and scoped Discord facts | Relationship-aware recall and correction edge cleanup verified against real FalkorDB. Tags are read-only in this editor; no full-database graph visualization. Actual isolated FalkorDB edit/delete verification passes. |
-| Background work | Long-running owner, Discord/Gmail intake and private web/Discord task execution through separate Harness conversations | Bounded serial private task executor (five outstanding, two-minute tasks) with owner-only results; no recurring scheduler, future monitor or voice background-call engine. |
+| Background work | Long-running owner, Discord/Gmail intake and private web/Discord task execution through separate Harness conversations | Bounded serial private task executor (five outstanding, two-minute tasks) with owner-only results; optional requested one-shot Discord reminders and generic private-task completion notices; no recurring scheduler, future monitor or voice background-call engine. |
 
 ## Activation and account setup
 
@@ -27,3 +27,8 @@ BYOK now supports separate OpenAI, Anthropic, Google/Gemini and selected OpenRou
 
 
 Local files now support explicit persistent owner folder grants, actual Pi read/create/edit and bounded discovery/text search, with private-only tools and known sensitive-path/content exclusions. Optional commands run only after exact review in an isolated disposable copy; no network or original-file command writes. See [local access scope and limits](local-files.md). Grants remain empty until the user configures them. Chat Markdown uses Streamdown with local scoped styling, safe links, highlighted/copyable code and contained tables; see [renderer evidence](markdown.md).
+
+
+Guided Discord onboarding now discovers bot metadata, generates an invite, and binds a verified slash-command account/channel only after local confirmation. Advanced manual settings remain. See [setup boundaries](discord-onboarding.md). Explicit opt-in Discord updates now have durable scheduling, source deduplication, cancellation and guarded actual delivery, with mock end-to-end proof; see [scope and limits](discord-notifications.md). No live unsolicited messages or setup changes were made by verification.
+
+The inconsistent Discord reply bug was a completed-output validator rejecting valid thinking+text responses. The fix accepts completed reasoning metadata but sends only visible text. Actual failed requests had successful model completions with the correct gpt-6-sol identity and no send receipt; simple text-only responses succeeded. No keyword-specific exception or recovery replay was added.
