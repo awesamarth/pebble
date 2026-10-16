@@ -12,6 +12,7 @@ return async (request:Request):Promise<Response>=>{
  try{
   if(request.method==='GET'){
    if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
+   if(path==='/providers')return json(await engine.providerCatalog());
    if(path==='/work')return json({tasks:engine.privateWorkItems()});
    if(path==='/integrations/status')return json(engine.integrations.status());if(path==='/integrations/events')return json(await engine.integrations.refreshSources());if(path==='/integrations/approvals')return json(engine.integrations.approvals());
    if(path==='/integrations/gmail/callback'){const q=new URL(request.url).searchParams;await engine.integrations.gmail.completeOAuth(q.get('code')??'',q.get('state')??'');return json({ok:true});}
@@ -54,7 +55,8 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/integrations/reject')return json(integrations.reject(body.id));
    if(path==='/profile'){engine.saveProfile(body);return json(await engine.status());}
    if(path==='/model-settings')return json(await engine.setGeneration(body));
-   if(path==='/provider'){if(body.provider!==undefined&&body.provider!=='openai')throw new SetupError('This version supports ChatGPT sign-in and OpenAI API keys. Choose an OpenAI connection.');await engine.setKey(body.key,body.model);return json(await engine.status());}
+   if(path==='/provider'){await engine.setKey(body.key,body.model,body.provider??'openai',body.reasoning);return json(await engine.status());}
+   if(path==='/provider/select')return json(await engine.selectConnection(body.connection));
    if(path==='/provider/disconnect'){await engine.disconnect();return json(await engine.status());}
    if(path==='/oauth/start')return json(engine.startOAuth());if(path==='/oauth/complete'){engine.completeOAuth(body.value);return json({ok:true});}
    if(path==='/memory/connect')return json(await engine.connectMemory(body,body.initialize===true));if(path==='/memory/health')return json(await engine.memoryHealth());if(path==='/memory/fact')return json(await engine.remember(body));

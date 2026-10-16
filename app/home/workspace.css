@@ -41,3 +41,5 @@
 @media(max-width:600px){.ws-message.user{max-width:93%}}
 
 .ws-composer>button{align-self:flex-end}
+
+.workspace .ws-provider-choice{margin-top:24px}

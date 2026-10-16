@@ -22,3 +22,5 @@ Keep the existing preview and user form intact. Runtime changes require a coordi
 Do not interpret an OAuth grant, Gateway connection, successful watch or localhost HTTP 200 as live end-to-end success. Final confirmation is an owner message yielding the intended response/intake through the connected account.
 
 See [assistant execution and audience boundaries](assistant-capabilities.md) for natural memory, channel tools, private work routing, limits and activation.
+
+BYOK now supports separate OpenAI, Anthropic, Google/Gemini and selected OpenRouter model catalogs, secure per-provider persistence and explicit saved connection selection. See [supported scope and verification](model-providers.md). Live UI/catalog checks are complete; successful paid inference for new providers is not claimed without supplied keys.
