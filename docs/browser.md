@@ -20,7 +20,7 @@ This is browser isolation, not a VM or operating-system firewall. DNS validation
 
 ## Screenshots and persistence
 
-Viewport screenshots mask recognized sensitive inputs. The panel preview is temporary and cleared on ownership changes. A screenshot explicitly requested by the agent may be retained in the local durable tool transcript and sent to the selected image-capable provider. Screenshots are never automatically added to FalkorDB. Cookies remain in the dedicated Chromium profile and are not exposed through tools. Browser-active conversation sources are excluded from automatic graph backfill, persistently; explicit source-backed remembering remains an opt-in operation. Masking cannot recognize every secret rendered as ordinary page text or images.
+Viewport screenshots mask recognized sensitive inputs. The panel preview is temporary and cleared on ownership changes. A screenshot explicitly requested by the agent may be retained in the local durable tool transcript and sent to the selected image-capable provider. Screenshots are never automatically added to FalkorDB. Cookies remain in the dedicated Chromium profile and are not exposed through tools. Browser-active conversation sources are excluded from automatic graph backfill, persistently; source-backed memory tools remain restricted to grounded current-owner text rather than page or screenshot content. Masking cannot recognize every secret rendered as ordinary page text or images.
 
 ## Provider contract and verification
 

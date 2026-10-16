@@ -24,3 +24,21 @@ test('private Gmail tools pass bounded reads without writes and fail safely when
  expect((await call('pebble_gmail_read',{id:'../token'})).isError).toBe(true);
  expect((await call('pebble_gmail_search',{query:'x'},{...host,searchGmail:undefined})).isError).toBe(true);
 });
+
+
+test('private conversation authorization denies recovered reads and drafts before callbacks run',async()=>{
+ const active=new Set(['active-private']);let reads=0,drafts=0;
+ const tools=workspaceExtension({authorize:id=>active.has(id),searchMemory:async()=>{reads++;return ['PRIVATE'];},canRemember:()=>true,remember:async()=>{},listIncoming:async()=>{reads++;return [];},createDraft:async()=>{drafts++;return {id:'draft'};},searchGmail:async()=>{reads++;return [];},readGmail:async()=>{reads++;return {};},startPrivateWork:async()=>{reads++;return {};},listPrivateWork:async()=>{reads++;return [];}},'pebble_private_work').tools!;
+ const call=(suffix:string,args:unknown,id='active-private')=>(tools.find(t=>t.name===`pebble_private_work_${suffix}`)!.execute as any)(args,{conversationId:id});
+ const draft={provider:'gmail',account:'owner',destination:'recipient@example.test',content:'Hello'};
+ for(const [name,args] of [['memory_search',{query:'x'}],['gmail_search',{query:'x'}],['gmail_read',{id:'abc'}],['incoming_messages',{}],['task_start',{}],['task_results',{}],['message_draft',draft]] as const)expect((await call(name,args,'recovered-private')).isError).toBe(true);
+ expect(reads).toBe(0);expect(drafts).toBe(0);
+ expect((await call('memory_search',{query:'x'})).isError).not.toBe(true);await call('message_draft',draft);expect(reads).toBe(1);expect(drafts).toBe(1);
+ active.delete('active-private');expect((await call('gmail_read',{id:'abc'})).isError).toBe(true);expect((await call('message_draft',draft)).isError).toBe(true);expect(reads).toBe(1);expect(drafts).toBe(1);
+});
+
+
+test('private generation scope section rejects recovered and released requests',()=>{
+ const active=new Set(['active']);const extension=workspaceExtension({authorize:id=>active.has(id),searchMemory:async()=>[],canRemember:()=>false,remember:async()=>{},listIncoming:async()=>[],createDraft:async()=>{}},'pebble_private_work');
+ const render=extension.sections![0].render as any;expect(()=>render({conversationId:'recovered'})).toThrow('no longer active');expect(render({conversationId:'active'})).toBeUndefined();active.clear();expect(()=>render({conversationId:'active'})).toThrow('no longer active');
+});

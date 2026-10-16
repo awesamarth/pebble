@@ -12,6 +12,7 @@ return async (request:Request):Promise<Response>=>{
  try{
   if(request.method==='GET'){
    if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
+   if(path==='/work')return json({tasks:engine.privateWorkItems()});
    if(path==='/integrations/status')return json(engine.integrations.status());if(path==='/integrations/events')return json(await engine.integrations.refreshSources());if(path==='/integrations/approvals')return json(engine.integrations.approvals());
    if(path==='/integrations/gmail/callback'){const q=new URL(request.url).searchParams;await engine.integrations.gmail.completeOAuth(q.get('code')??'',q.get('state')??'');return json({ok:true});}
    if(path==='/model-settings')return json(await engine.generationView());if(path==='/status')return json(await engine.status());if(path==='/history')return json(engine.snapshot());if(path==='/models')return json(await engine.activeModelChoices());if(path==='/oauth')return json(engine.oauth);if(path==='/memory')return json(await engine.facts(new URL(request.url).searchParams.get('q')??''));
