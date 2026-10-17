@@ -121,6 +121,11 @@ export class GraphMemory {
     if(!rows.length)throw new Error('This fact changed or is no longer available. Refresh memory before removing it.');
   }
   private validateEdit(value:{id:string;sourceId:string;expectedText:string}){if(!value||typeof value.id!=='string'||!value.id||value.id.length>250||typeof value.sourceId!=='string'||!value.sourceId||value.sourceId.length>250||typeof value.expectedText!=='string'||!value.expectedText||value.expectedText.length>2000)throw new Error('Choose an existing fact and its source.');}
+  async source(id:string):Promise<MessageSource|null>{
+    if(typeof id!=='string'||!id||id.length>250)throw new Error('Choose a valid saved source.');
+    const rows=await this.run('MATCH (s:Source {id: $id}) RETURN s.id AS id,s.conversationId AS conversationId,s.role AS role,s.text AS text LIMIT 1',{id},true);
+    const row=rows[0];return row?{id:String(row.id),conversationId:String(row.conversationId),role:String(row.role),text:String(row.text).slice(0,16000)}:null;
+  }
   async recall(query: string, conversationId?: string): Promise<MemoryFact[]> {
     const params: Params = { query: query.trim().slice(0, 2000), conversationId: conversationId ?? '', scoped: conversationId !== undefined };
     const columns = 'f.id AS id, f.text AS text, s.id AS sourceId, s.text AS sourceText, s.conversationId AS conversationId, s.role AS role, p.name AS person, j.name AS project';

@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {LockKeyhole,RefreshCw} from 'lucide-react';
 import './private-work.css';
+import {MessageMarkdown} from './message-markdown';
 
 type WorkTask={id:string;state:string;request:string;result?:string;issue?:string;createdAt:number;updatedAt:number};
 const states:Record<string,string>={queued:'Waiting to start',running:'Working',completed:'Completed',failed:'Couldn’t complete',unknown:'Interrupted — review needed'};
@@ -46,7 +47,7 @@ export default function PrivateWork(){
   <div className="private-work-list">{tasks.map(task=><article className="private-work-task" key={task.id}>
    <header><span className={`private-work-state private-work-state-${['queued','running','completed','failed','unknown'].includes(task.state)?task.state:'unknown'}`}>{states[task.state]??'Status unavailable'}</span><time dateTime={Number.isFinite(task.updatedAt)?new Date(task.updatedAt).toISOString():undefined} title={`Started ${time(task.createdAt)}`}>{time(task.updatedAt)}</time></header>
    <h3>Your request</h3><p className="private-work-text">{task.request}</p>
-   {task.result!==undefined&&<div className="private-work-result"><h3>Result</h3><p className="private-work-text">{task.result||'No result text was returned.'}</p></div>}
+   {task.result!==undefined&&<div className="private-work-result"><h3>Result</h3><MessageMarkdown text={task.result||'No result text was returned.'}/></div>}
    {task.issue&&<p className="private-work-issue">{task.issue}</p>}
    {task.state==='unknown'&&!task.issue&&<p className="private-work-issue">Work was interrupted. Review what happened before asking again.</p>}
    {task.state==='failed'&&!task.issue&&<p className="private-work-issue">This task couldn’t be completed. Review the request and your connections before trying again.</p>}

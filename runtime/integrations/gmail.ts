@@ -1,9 +1,10 @@
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
 const READ = 'https://www.googleapis.com/auth/gmail.readonly';
+const PUBSUB = 'https://www.googleapis.com/auth/pubsub';
 const SEND = 'https://www.googleapis.com/auth/gmail.send';
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
-export type GmailConfig = { clientId: string; clientSecret: string; redirectUri?: string; allowSend?: boolean; allowFullContent?: boolean; ingestEnabled?: boolean; topicName?: string; pushAudience?: string; pushServiceAccount?: string; subscription?: string };
+export type GmailConfig = { clientId: string; clientSecret: string; deliveryMode?: 'manual' | 'pull' | 'push'; redirectUri?: string; allowSend?: boolean; allowFullContent?: boolean; ingestEnabled?: boolean; topicName?: string; pushAudience?: string; pushServiceAccount?: string; subscription?: string };
 export type GmailEvent = { id: string; kind: 'message'; source: 'gmail'; message: Record<string, unknown>; contentMode: 'metadata' | 'full' };
 export type GmailHooks = { schedule?: (callback: () => void, delay: number) => (() => void); fetch?: typeof fetch; verifyPush?: (token: string, audience: string) => Promise<JWTPayload>; onEvent: (event: GmailEvent) => Promise<void>; onCursor?: (historyId: string, email?: string) => Promise<void>; loadCursor?: (email: string) => Promise<string | undefined>; deliverySeen?: (key: string) => Promise<boolean>; onDelivery?: (key: string) => Promise<void> };
 export class GmailError extends Error { constructor(public code: string) { super(code); } }
@@ -22,6 +23,7 @@ export class GmailIntegration {
   private timer?: () => void;
   private renewalAttempts = 0;
   private watchEpoch = 0;
+  private pullTimer?:()=>void;private pullEpoch=0;private pullAbort=new AbortController();private pulling?:Promise<{received:number;acknowledged:number}>;private pullState:'stopped'|'running'|'error'='stopped';private pullError?:string;private pullFailures=0;
   private refreshing?: Promise<NonNullable<GmailIntegration['token']>>;
   private recovery = false;
   private error?: string;
@@ -32,22 +34,24 @@ export class GmailIntegration {
   private syncQueue: Promise<unknown> = Promise.resolve();
   constructor(private hooks: GmailHooks) { this.fetcher = hooks.fetch ?? fetch; }
   configure(config: GmailConfig) {
-    this.disconnect();
-    if (!config.clientId.trim() || !config.clientSecret.trim()) throw new GmailError('oauth_configuration_required');
+    if (!config||typeof config.clientId!=='string'||typeof config.clientSecret!=='string'||!config.clientId.trim() || !config.clientSecret.trim()) throw new GmailError('oauth_configuration_required');
     const redirectUri = config.redirectUri ?? 'http://127.0.0.1:7341/api/integrations/gmail/callback';
     if (redirectUri !== 'http://127.0.0.1:7341/api/integrations/gmail/callback') throw new GmailError('invalid_redirect_uri');
-    this.abort = new AbortController();
+    if(config.deliveryMode&&!['manual','pull','push'].includes(config.deliveryMode))throw new GmailError('invalid_delivery_mode');
+    if(config.subscription&&!/^projects\/[A-Za-z0-9][A-Za-z0-9._~-]*\/subscriptions\/[A-Za-z0-9_-][A-Za-z0-9._~-]*$/.test(config.subscription))throw new GmailError('invalid_pubsub_subscription');
+    this.disconnect();this.abort = new AbortController();
     this.config = { ...config, redirectUri };
   }
-  status() { return { configured: !!this.config, connected: !!this.token, email: this.email, allowSend: !!this.config?.allowSend && !!this.token?.scopes.includes(SEND), ingestEnabled: !!this.config?.ingestEnabled, contentMode: this.config?.allowFullContent ? 'full' : 'metadata', historyId: this.historyId, watchExpires: this.watchExpires, renewalAttempts: this.renewalAttempts, needsResyncConsent: this.recovery, error: this.error }; }
+  status() { return { deliveryMode:this.config?.deliveryMode??'manual',pullState:this.pullState,pullError:this.pullError, configured: !!this.config, connected: !!this.token, email: this.email, allowSend: !!this.config?.allowSend && !!this.token?.scopes.includes(SEND), ingestEnabled: !!this.config?.ingestEnabled, contentMode: this.config?.allowFullContent ? 'full' : 'metadata', historyId: this.historyId, watchExpires: this.watchExpires, renewalAttempts: this.renewalAttempts, needsResyncConsent: this.recovery, error: this.error }; }
   async beginOAuth() {
-    const c = this.requiredConfig();
+    const c = this.requiredConfig();const generation=this.generation;
     const verifier = Buffer.from(crypto.getRandomValues(new Uint8Array(48))).toString('base64url');
     const state = crypto.randomUUID();
     const challenge = Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))).toString('base64url');
+    if(generation!==this.generation)throw new GmailError('session_disconnected');
     this.pending = { state, verifier, expires: Date.now() + 600_000 };
     const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    url.search = new URLSearchParams({ client_id: c.clientId, redirect_uri: c.redirectUri!, response_type: 'code', scope: [READ, ...(c.allowSend ? [SEND] : [])].join(' '), access_type: 'offline', prompt: 'consent', state, code_challenge: challenge, code_challenge_method: 'S256' }).toString();
+    url.search = new URLSearchParams({ client_id: c.clientId, redirect_uri: c.redirectUri!, response_type: 'code', scope: [READ, ...(c.allowSend ? [SEND] : []),...(c.deliveryMode==='pull'?[PUBSUB]:[])].join(' '), access_type: 'offline', prompt: 'consent', state, code_challenge: challenge, code_challenge_method: 'S256' }).toString();
     return { url: url.toString(), state };
   }
   async completeOAuth(code: string, state: string) {
@@ -59,7 +63,7 @@ export class GmailIntegration {
     const scopes = String(data.scope ?? '').split(' ');
     if (!scopes.includes(READ)) throw new GmailError('readonly_scope_required');
     this.token = { access: String(data.access_token), refresh: typeof data.refresh_token === 'string' ? data.refresh_token : undefined, expires: Date.now() + Number(data.expires_in ?? 3600) * 1000, scopes };
-    try { const profile = await this.api('/profile'); if (generation !== this.generation) throw new GmailError('session_disconnected'); this.email = String(profile.emailAddress); const restored = await this.hooks.loadCursor?.(this.email); this.historyId = cursor(restored ?? profile.historyId); await this.hooks.onCursor?.(this.historyId, this.email); } catch (e) { this.token = undefined; throw e; }
+    try { const profile = await this.api('/profile'); if (generation !== this.generation) throw new GmailError('session_disconnected'); if(typeof profile.emailAddress!=='string'||!profile.emailAddress.includes('@'))throw new GmailError('invalid_mail_profile');this.email = profile.emailAddress; const restored = await this.hooks.loadCursor?.(this.email);if(generation!==this.generation)throw new GmailError('session_disconnected'); this.historyId = cursor(restored ?? profile.historyId); await this.hooks.onCursor?.(this.historyId, this.email); } catch (e) { if(generation===this.generation)this.token = undefined; throw e; }
     return this.status();
   }
   /** On-demand reads never call onEvent or change the saved history cursor. */
@@ -140,11 +144,14 @@ export class GmailIntegration {
   }
 
   async handlePush(authorization: string | null, body: unknown) {
-    const c = this.requiredConfig();
+    const c = this.requiredConfig();const generation=this.generation;
     if (!c.pushAudience || !c.pushServiceAccount || !c.subscription) throw new GmailError('push_configuration_required');
     if (!authorization?.startsWith('Bearer ')) throw new GmailError('invalid_push_auth');
     const claims = await (this.hooks.verifyPush ?? (async (token, audience) => (await jwtVerify(token, jwks, { audience, issuer: ['https://accounts.google.com', 'accounts.google.com'], algorithms: ['RS256'], maxTokenAge: '1h' })).payload))(authorization.slice(7), c.pushAudience);
     if (!['https://accounts.google.com', 'accounts.google.com'].includes(String(claims.iss)) || claims.email !== c.pushServiceAccount || claims.email_verified !== true || !claims.exp || claims.exp * 1000 <= Date.now() || !(claims.aud === c.pushAudience || Array.isArray(claims.aud) && claims.aud.includes(c.pushAudience))) throw new GmailError('invalid_push_identity');
+    if(generation!==this.generation)throw new GmailError('session_disconnected');return this.notification(body,c,generation);
+  }
+  private async notification(body:unknown,c:GmailConfig,generation:number){
     const envelope = body as { subscription?: string; message?: { data?: string; messageId?: string } };
     if (envelope?.subscription !== c.subscription || !envelope.message?.messageId || typeof envelope.message.data !== 'string' || envelope.message.data.length > 8192) throw new GmailError('invalid_push_payload');
     let payload: { emailAddress?: string; historyId?: string };
@@ -153,8 +160,42 @@ export class GmailIntegration {
     const target = cursor(payload.historyId);
     // Serialized cursor advancement handles duplicate/out-of-order notifications, including concurrent deliveries.
     const deliveryKey = `gmail-push:${c.subscription}:${envelope.message.messageId}`;
-    const task = this.queue.then(async () => { if (await this.hooks.deliverySeen?.(deliveryKey)) return { duplicate: true }; if (this.historyId && BigInt(target) <= BigInt(this.historyId)) return { duplicate: true }; await this.syncHistory(); await this.hooks.onDelivery?.(deliveryKey); return { duplicate: false }; });
+    const task = this.queue.then(async () => { if(generation!==this.generation)throw new GmailError('session_disconnected');if (await this.hooks.deliverySeen?.(deliveryKey)) return { duplicate: true }; if (this.historyId && BigInt(target) <= BigInt(this.historyId)) return { duplicate: true }; await this.syncHistory();if(generation!==this.generation)throw new GmailError('session_disconnected'); await this.hooks.onDelivery?.(deliveryKey); return { duplicate: false }; });
     this.queue = task.catch(() => {}); return task;
+  }
+  /** Pull receives Google Pub/Sub notifications locally; it does not periodically scan the mailbox. */
+  async startPull(){
+    const c=this.requiredConfig();if(c.deliveryMode!=='pull')throw new GmailError('pull_mode_required');if(!c.subscription)throw new GmailError('pubsub_subscription_required');if(!c.ingestEnabled)throw new GmailError('ingestion_consent_required');
+    if(!this.token?.scopes.includes(PUBSUB))throw new GmailError('pubsub_scope_reconnect_required');
+    this.stopPull();const epoch=this.pullEpoch;await this.startWatch();
+    if(epoch!==this.pullEpoch)throw new GmailError('session_disconnected');this.pullState='running';this.pullFailures=0;this.pullError=undefined;this.pullTimer=this.schedule(()=>{void this.pullLoop(epoch);},1);
+    return this.status();
+  }
+  stopPull(){this.pullEpoch++;this.pullTimer?.();this.pullTimer=undefined;this.pullAbort.abort();this.pullAbort=new AbortController();this.pullState='stopped';this.pullError=undefined;this.pullFailures=0;return this.status();}
+  async pullOnce():Promise<{received:number;acknowledged:number}>{
+    if(this.pulling)return this.pulling;
+    const c=this.requiredConfig();this.requireRead();if(c.deliveryMode!=='pull')throw new GmailError('pull_mode_required');if(!c.ingestEnabled)throw new GmailError('ingestion_consent_required');
+    if(!c.subscription)throw new GmailError('pubsub_subscription_required');if(!this.token?.scopes.includes(PUBSUB))throw new GmailError('pubsub_scope_reconnect_required');
+    const generation=this.generation,epoch=this.pullEpoch,signal=this.pullAbort.signal;
+    const operation=(async()=>{
+      const result=await this.api(`/${c.subscription}:pull`,{method:'POST',body:JSON.stringify({maxMessages:10}),signal},'https://pubsub.googleapis.com/v1');
+      if(generation!==this.generation||epoch!==this.pullEpoch)throw new GmailError('session_disconnected');
+      const messages=Array.isArray(result.receivedMessages)?result.receivedMessages.slice(0,10):[];let acknowledged=0;
+      for(const received of messages as {ackId?:unknown;message?:unknown}[]){
+        if(typeof received.ackId!=='string'||!received.ackId||received.ackId.length>4096)throw new GmailError('invalid_pubsub_delivery');
+        await this.notification({subscription:c.subscription,message:received.message},c,generation);
+        if(generation!==this.generation||epoch!==this.pullEpoch)throw new GmailError('session_disconnected');
+        await this.api(`/${c.subscription}:acknowledge`,{method:'POST',body:JSON.stringify({ackIds:[received.ackId]}),signal},'https://pubsub.googleapis.com/v1');acknowledged++;
+      }
+      return {received:messages.length,acknowledged};
+    })();this.pulling=operation;
+    try{return await operation;}finally{if(this.pulling===operation)this.pulling=undefined;}
+  }
+  private async pullLoop(epoch:number){
+    if(epoch!==this.pullEpoch||this.pullState!=='running')return;let delay=1000;
+    try{await this.pullOnce();if(epoch!==this.pullEpoch)return;this.pullFailures=0;this.pullError=undefined;}
+    catch(error){if(epoch!==this.pullEpoch)return;this.pullError=error instanceof GmailError?error.code:'pubsub_pull_failed';delay=Math.min(60000,1000*2**++this.pullFailures);if(this.pullFailures>=6){this.pullState='error';return;}}
+    this.pullTimer=this.schedule(()=>{void this.pullLoop(epoch);},delay);
   }
   async syncHistory() {
     const task = this.syncQueue.then(() => this.syncHistoryInternal()); this.syncQueue = task.catch(() => {}); return task;
@@ -174,19 +215,29 @@ export class GmailIntegration {
           let message: Record<string, unknown>;
           try { message = await this.api(`/messages/${encodeURIComponent(id)}?format=${mode}${mode === 'metadata' ? '&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date' : ''}`); } catch (e) { if (e instanceof GmailError && e.code === 'gmail_http_404') continue; throw e; }
           if (generation !== this.generation) throw new GmailError('session_disconnected');
-          if (mode === 'metadata') { const payload = message.payload as { headers?: unknown[] } | undefined; message = { id: message.id, threadId: message.threadId, labelIds: message.labelIds, internalDate: message.internalDate, payload: { headers: payload?.headers ?? [] } }; }
+          message=this.boundedImport(message,mode);
           await this.hooks.onEvent({ id: `gmail:${this.email}:${id}`, kind: 'message', source: 'gmail', message, contentMode: mode });
         }
       }
       latest = maxCursor(latest, cursor(data.historyId)); page = typeof data.nextPageToken === 'string' ? data.nextPageToken : undefined;
     } while (page);
     if (generation !== this.generation) throw new GmailError('session_disconnected');
-    await this.hooks.onCursor?.(latest, this.email); this.historyId = latest;
+    await this.hooks.onCursor?.(latest, this.email); if(generation!==this.generation)throw new GmailError('session_disconnected');this.historyId = latest;
     } catch (e) { if (e instanceof GmailError && e.code === 'gmail_http_404') { this.recovery = true; this.error = 'history_expired_resync_consent_required'; } throw e; }
     return this.status();
   }
+  /** Imported mail is bounded plain text; never fetch attachments, HTML resources or remote images. */
+  private boundedImport(message:Record<string,unknown>,mode:'metadata'|'full'){
+    type Part={mimeType?:string;filename?:string;body?:{data?:string};headers?:{name?:string;value?:string}[];parts?:Part[]};
+    const payload=message.payload as Part|undefined;
+    const headers=(payload?.headers??[]).filter(h=>['from','to','subject','date'].includes(String(h.name).toLowerCase())).slice(0,10).map(h=>({name:String(h.name).slice(0,20),value:String(h.value??'').slice(0,2000)}));
+    let text='',visited=0;
+    const collect=(part:Part,depth=0)=>{if(depth>8||++visited>100||text.length>=20000||part.filename||part.headers?.some(h=>String(h.name).toLowerCase()==='content-disposition'&&/^attachment/i.test(String(h.value))))return;if(part.mimeType==='text/plain'&&typeof part.body?.data==='string')text+=Buffer.from(part.body.data.slice(0,40000),'base64url').toString('utf8').slice(0,20000-text.length)+'\n';for(const child of part.parts?.slice(0,20)??[])collect(child,depth+1);};
+    if(mode==='full'&&payload)collect(payload);
+    return {id:message.id,threadId:message.threadId,labelIds:message.labelIds,internalDate:message.internalDate,payload:{headers,...(mode==='full'?{mimeType:'text/plain',body:{data:Buffer.from(text.slice(0,20000)).toString('base64url')}}:{})}};
+  }
   /** Explicit recovery skips the inaccessible gap, never imports the full mailbox. */
-  async resumeFromNow(consent: boolean) { if (!consent) throw new GmailError('resync_consent_required'); const data = await this.api('/profile'); const id = cursor(data.historyId); await this.hooks.onCursor?.(id, this.email); this.historyId = id; this.recovery = false; this.error = undefined; return this.status(); }
+  async resumeFromNow(consent: boolean) { if (!consent) throw new GmailError('resync_consent_required');const generation=this.generation; const data = await this.api('/profile');if(generation!==this.generation)throw new GmailError('session_disconnected'); const id = cursor(data.historyId); await this.hooks.onCursor?.(id, this.email);if(generation!==this.generation)throw new GmailError('session_disconnected'); this.historyId = id; this.recovery = false; this.error = undefined; return this.status(); }
   /** Caller must execute this exclusively inside its durable one-shot approval gate. */
   async sendApproved(raw: string, approval: { execute: <T>(operation: () => Promise<T>) => Promise<T> }) {
     if (!this.status().allowSend) throw new GmailError('send_scope_required');
@@ -195,11 +246,11 @@ export class GmailIntegration {
     const generation=this.generation;
     return approval.execute(() => { if(generation!==this.generation)throw new GmailError('session_disconnected'); return this.api('/messages/send', { method: 'POST', body: JSON.stringify({ raw }) }); });
   }
-  async stopWatch() { this.watchEpoch++; this.timer?.(); await this.api('/stop',{method:'POST'}); this.timer=undefined; this.watchExpires=undefined; }
-  disconnect() { this.abort.abort(); this.generation++; this.watchEpoch++; this.timer?.(); this.timer = undefined; this.refreshing = undefined; this.renewalAttempts = 0; this.token = undefined; this.pending = undefined; this.config = undefined; this.email = undefined; this.historyId = undefined; this.watchExpires = undefined; this.recovery = false; this.error = undefined; }
+  async stopWatch() { this.stopPull();this.watchEpoch++; this.timer?.(); await this.api('/stop',{method:'POST'}); this.timer=undefined; this.watchExpires=undefined; }
+  disconnect() { this.stopPull();this.abort.abort(); this.generation++; this.watchEpoch++; this.timer?.(); this.timer = undefined; this.refreshing = undefined; this.renewalAttempts = 0; this.token = undefined; this.pending = undefined; this.config = undefined; this.email = undefined; this.historyId = undefined; this.watchExpires = undefined; this.recovery = false; this.error = undefined; }
   private requiredConfig() { if (!this.config) throw new GmailError('oauth_configuration_required'); return this.config; }
-  private async tokenRequest(fields: Record<string, string>): Promise<Record<string, unknown>> { const response = await this.fetcher('https://oauth2.googleapis.com/token', { method: 'POST', signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15_000)]), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields) }); if (!response.ok) throw new GmailError('oauth_exchange_failed'); const data = await response.json(); if (typeof data.access_token !== 'string' || !data.access_token) throw new GmailError('oauth_exchange_failed'); return data; }
-  private async api(path: string, init: RequestInit = {}): Promise<Record<string, unknown>> {
+  private async tokenRequest(fields: Record<string, string>): Promise<Record<string, unknown>> { const response = await this.fetcher('https://oauth2.googleapis.com/token', { method: 'POST', redirect:'error',signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15_000)]), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(fields) }); if (!response.ok) throw new GmailError('oauth_exchange_failed'); const data = await response.json(); if (typeof data.access_token !== 'string' || !data.access_token) throw new GmailError('oauth_exchange_failed'); return data; }
+  private async api(path: string, init: RequestInit = {},base=BASE): Promise<Record<string, unknown>> {
     let token = this.token; if (!token) throw new GmailError('gmail_connection_required'); const generation = this.generation;
     if (token.expires < Date.now() + 60_000) {
       if (!this.refreshing) {
@@ -211,8 +262,8 @@ export class GmailIntegration {
       }
       token = await this.refreshing;
     }
-    const response = await this.fetcher(`${BASE}${path}`, { ...init, signal: AbortSignal.any([this.abort.signal, AbortSignal.timeout(15_000)]), headers: { Authorization: `Bearer ${token.access}`, 'Content-Type': 'application/json' } });
-    if (!response.ok) throw new GmailError(`gmail_http_${response.status}`);
+    const response = await this.fetcher(`${base}${path}`, { ...init, redirect:'error',signal: AbortSignal.any([this.abort.signal,...(init.signal?[init.signal]:[]), AbortSignal.timeout(base===BASE?30_000:95_000)]), headers: { Authorization: `Bearer ${token.access}`, 'Content-Type': 'application/json' } });
+    if (!response.ok) throw new GmailError(`${base===BASE?'gmail':'pubsub'}_http_${response.status}`);
     return response.status === 204 ? {} : response.json();
   }
 }

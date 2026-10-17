@@ -43,3 +43,10 @@ describe("browser public network boundary", () => {
     } finally { Object.assign(process.env, { NODE_ENV: original }); }
   });
 });
+
+test('public research excludes sensitive paths and query commands while allowing normal public searches',async()=>{
+ const {assertPublicResearchUrl}=await import('./network');
+ for(const url of ['https://publicsite.com/docs/intro','https://publicsite.com/search?q=pebble&page=2','https://publicsite.com/articles/reading'])expect(assertPublicResearchUrl(url).protocol).toBe('https:');
+ for(const url of ['https://accounts.publicsite.com/','https://publicsite.com/logout','https://publicsite.com/sign-in','https://publicsite.com/%2564elete','https://publicsite.com/account','https://publicsite.com/checkout','https://publicsite.com/%64elete','https://publicsite.com/search?token=abc','https://publicsite.com/?action=delete','https://publicsite.com/?unknown=anything','https://user:password@publicsite.com/'])expect(()=>assertPublicResearchUrl(url)).toThrow();
+ expect(assertPublicResearchUrl('https://publicsite.com/style.css?v=1',true).pathname).toBe('/style.css');expect(()=>assertPublicResearchUrl('https://publicsite.com/file?action=delete',true)).toThrow();
+});

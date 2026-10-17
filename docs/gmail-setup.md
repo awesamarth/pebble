@@ -28,9 +28,23 @@ An expired history position requires explicit **Skip the gap & resume from now**
 
 Once Gmail is connected, bounded mailbox search/read can use the existing read-only grant. A search returns at most ten messages and does not import results, move the saved-message cursor or require an inbox-saving choice. Metadata mode still limits returned content to From/To/Subject/Date; enable full text before connecting to let reads return up to 20,000 characters of plain text. Attachments and HTML-only bodies are not read. Results are untrusted email content. Their `gmail:account:messageId` references identify Google messages, not evidence that the message has been saved to local memory. Model conversation history may retain a tool result used in that conversation.
 
-## Optional event-driven intake
+## Optional local automatic updates (Pub/Sub pull)
 
-Manual checks work immediately after OAuth. Actual push additionally needs a user-approved public HTTPS endpoint; this repo creates no tunnel or Google resources.
+This path keeps pebble on your Mac. Google publishes inbox-change notifications to your own Cloud Pub/Sub subscription; pebble receives them through outgoing authenticated requests. No public callback, tunnel, service-account key or new hosting vendor is needed. The owner process must remain running. This does not add scheduled mailbox scanning. [Gmail supports both pull and push subscriptions](https://developers.google.com/workspace/gmail/api/guides/push).
+
+1. In the **same project as your OAuth client**, enable **Cloud Pub/Sub API** as well as Gmail API. Complete any Google project prerequisites yourself; pebble never enables billing, buys a service or creates Cloud resources.
+2. Create a topic and a **Pull** subscription dedicated to this mailbox. Copy the complete resource names, for example `projects/PROJECT_ID/topics/pebble-gmail` and `projects/PROJECT_ID/subscriptions/pebble-gmail-local`. Grant **Pub/Sub Publisher** on the topic to `gmail-api-push@system.gserviceaccount.com`.
+3. On that subscription, grant **Pub/Sub Subscriber** (`roles/pubsub.subscriber`) to the Google user who will sign in to pebble. That account needs `pubsub.subscriptions.consume`; publisher access alone is insufficient. Project administration and subscription creation are separate setup permissions, not permissions pebble requests. See [Pub/Sub access control](https://docs.cloud.google.com/pubsub/docs/access-control).
+4. Select **Local automatic updates** in Gmail setup, enter the topic/subscription, and opt in to saving incoming emails. Save setup and reconnect Google. This mode additionally requests `https://www.googleapis.com/auth/pubsub`; an existing Gmail-only token cannot receive subscription notifications. [Google's pull endpoint requires that scope](https://docs.cloud.google.com/pubsub/docs/reference/rest/v1/projects.subscriptions/pull).
+5. Start local updates. Check that the watch has an expiry and the local receiver is running, then send a new INBOX email yourself. An entry in **Incoming** confirms actual import. Running/connected badges alone do not prove delivery.
+
+Notifications are acknowledged only after processing and durable intake. Failed processing stays unacknowledged for Google redelivery; duplicates remain safe. [Acknowledgment removes delivered Pub/Sub messages](https://docs.cloud.google.com/pubsub/docs/reference/rest/v1/projects.subscriptions/acknowledge). Configure an acknowledgment deadline suitable for processing; this implementation does not extend individual deadlines, so redelivery may occur. Retries back off and stop after six consecutive receiver failures. The app exposes the error and allows manual retry. Watch renewal continues while connected; stopping the local receiver does not revoke Google's OAuth grant. Disconnect or stopping the watch also cancels local receiving. Missing notifications can still require **Check new changes**; no periodic mailbox fallback is enabled.
+
+Setup and OAuth tokens remain session-only. After owner restart, reconnect and start receiving again. Saved cursors/messages remain local. The implementation was verified with intercepted Google API fixtures, not a real mailbox.
+
+## Optional externally hosted push intake
+
+Manual checks work immediately after OAuth. Externally delivered push additionally needs a user-approved public HTTPS endpoint; this repo creates no tunnel or Google resources.
 
 1. In the OAuth client's Google project, open Pub/Sub → Topics and create `pebble-gmail`. On that topic, grant **Pub/Sub Publisher** to `gmail-api-push@system.gserviceaccount.com`. Copy `projects/PROJECT_ID/topics/pebble-gmail`. See [Gmail push setup](https://developers.google.com/workspace/gmail/api/guides/push).
 2. Create a dedicated service account such as `pebble-gmail-push`; no JSON key is needed. Create a subscription to the topic with delivery type **Push**. Its approved public endpoint must forward only `/api/integrations/gmail/push`, preserving the Authorization header and JSON body. Do not expose `/api/runtime`, the owner port, files or development UI.
@@ -42,9 +56,11 @@ A connection/watch success alone does not prove public delivery. Verify that Inc
 ## Troubleshooting
 
 - `redirect_uri_mismatch`: fix the authorized redirect on the same OAuth client used in pebble; copy the exact callback above.
+- `pubsub scope reconnect required`: save setup in local automatic mode and authorize Google again.
+- `pubsub http 403`: check the Pub/Sub API, subscription name and Subscriber access for the signed-in Google user. OAuth permission alone does not grant Cloud IAM access.
 - Google refuses access: check Gmail API is enabled, the account is a test user, and organization policy allows the grant.
 - Connected but no messages: confirm message-saving was selected before authorization, send a new message to INBOX, then use **Check new changes**. Existing older emails are not fetched.
 - Manual checking disabled: choose permission to save new inbox emails in setup and authorize again.
-- **Turn on email updates** fails with blank advanced fields: use **Check new changes** instead; push needs its separate Cloud setup.
+- **Turn on email updates** fails with blank advanced fields: use **Check new changes** instead; choose manual checks or complete the selected pull/push Cloud setup.
 
 Official references: [Google web OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Gmail incremental sync](https://developers.google.com/workspace/gmail/api/guides/sync), [Gmail push](https://developers.google.com/workspace/gmail/api/guides/push).

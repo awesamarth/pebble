@@ -96,3 +96,11 @@ test('entity labels cannot introduce names absent from a grounded fact',async()=
  await expect(memory.rememberFact({id:'f',sourceId:'s',text:'Mira prefers quiet mornings.',person:'Invented'})).rejects.toThrow('Entity names');
  expect(fake.calls).toHaveLength(0);
 });
+
+
+test('saved source lookup is bounded, read only and parameterized',async()=>{
+ const fake=isolatedGraphDouble();const memory=new GraphMemory(config,async()=>fake.connection);const id='gmail:'+ 'a'.repeat(64);
+ fake.setRows([{id,conversationId:'mail',role:'gmail',text:'x'.repeat(17000)}]);
+ expect((await memory.source(id))?.text).toHaveLength(16000);expect(fake.calls.at(-1)?.params).toEqual({id});expect(fake.calls.at(-1)?.readOnly).toBe(true);expect(fake.calls.at(-1)?.query).not.toContain(id);
+ fake.setRows([]);expect(await memory.source('missing')).toBeNull();await expect(memory.source('')).rejects.toThrow('valid saved source');await memory.close();
+});

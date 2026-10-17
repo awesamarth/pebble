@@ -10,3 +10,9 @@ test('incomplete emphasis is repaired and URL policy permits only explicit safe 
  for(const url of ['https://example.com/a','http://example.com','mailto:friend@example.com','#source-one'])expect(safeMarkdownUrl(url)).toBe(url);
  for(const url of ['javascript:alert(1)','data:text/html,test','file:///etc/passwd','vbscript:msgbox(1)','//tracker.invalid/pixel','/api/runtime/status','java\nscript:alert(1)'])expect(safeMarkdownUrl(url)).toBeUndefined();
 });
+
+test('recognized source citations render inspectable buttons while code and links stay literal',()=>{
+ const id=`discord:${'a'.repeat(64)}`;
+ const html=renderToStaticMarkup(<MessageMarkdown text={`A grounded claim [${id}] and another [Source: 1:7:0].\n\n\`${id}\`\n\n[Ordinary](https://example.com)\n\n\`[Source: 1:8:0]\`\n\nSource: gmail:${'b'.repeat(64)}`}/>);
+ expect((html.match(/aria-label="Open saved source"/g)??[])).toHaveLength(3);expect(html).toContain('href="https://example.com"');expect(html).toContain('[Source: 1:8:0]');expect(html).toContain(`<code`);expect(html).not.toContain(`[${id}]`);
+});

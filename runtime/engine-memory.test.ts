@@ -83,3 +83,31 @@ test('password-bearing graph connection remains session-only and clears previous
   expect((await engine.status()).memory.state).toBe('setup_required');
  }finally{await engine.close();await rm(directory,{recursive:true,force:true});}
 });
+
+test('browser-derived assistant output stays out of graph after stop and durable restart',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'pebble-browser-memory-'));
+ const config={host:'synthetic.invalid',port:7380,tls:false,graph:'synthetic_browser_fixture'};
+ const sources:string[]=[];let generation=0;
+ const models=createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}});const base=openaiProvider();
+ models.setProvider({...base,auth:{apiKey:{name:'synthetic',resolve:async()=>({auth:{apiKey:'synthetic'}})}},streamSimple:model=>{
+  generation++;const tool=generation===1;
+  const message:AssistantMessage={role:'assistant',content:tool?[{type:'toolCall',id:'synthetic_browser_call',name:'pebble_browser_start_research',arguments:{url:'https://example.com'}}]:[{type:'text',text:`Synthetic browser-derived answer ${generation}`}],provider:'openai',api:'openai-responses',model:model.id,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:tool?'toolUse':'stop',timestamp:Date.now()};
+  const stream=createAssistantMessageEventStream();queueMicrotask(()=>stream.push({type:'done',reason:tool?'toolUse':'stop',message}));return stream;
+ }});
+ const factory=()=>new GraphMemory(config,async()=>({run:async(query,params)=>{if(query==='RETURN 1 AS ok')return [{ok:1}];if(query.includes('MERGE (s:Source'))sources.push(String(params.text));return [];},close:async()=>{}}));
+ let engine=await Engine.open(directory,models,factory);
+ try{
+  engine.saveProfile(defaultLook);await engine.setKey('synthetic-only-key');await engine.connectMemory(config);
+  // Simulate research returning a page and already being stopped before the answer.
+  // No real browser, network, credentials or external messages are involved.
+  engine.browser.startResearch=async()=>({untrusted:true,text:'Synthetic page content'} as never);
+  const send=async(text:string,id:string,answer:number)=>{await engine.send(text,id);for(let i=0;i<200&&(engine.snapshot().busy||!engine.snapshot().messages.some(m=>m.text===`Synthetic browser-derived answer ${answer}`));i++)await Bun.sleep(10);expect(engine.snapshot().messages.some(m=>m.text===`Synthetic browser-derived answer ${answer}`)).toBe(true);};
+  await send('Research a synthetic public page.','browser-memory-fixture-one',2);
+  await send('Explain that result again.','browser-memory-fixture-two',3);
+  await engine.close();engine=await Engine.open(directory,models,factory);
+  await engine.memoryHealth();
+  expect(sources).toContain('Research a synthetic public page.');
+  expect(sources.some(text=>text.includes('Synthetic browser-derived answer'))).toBe(false);
+  expect(engine.snapshot().messages.some(m=>m.text==='Synthetic browser-derived answer 2')).toBe(true);
+ }finally{await engine.close();await rm(directory,{recursive:true,force:true});}
+},15000);

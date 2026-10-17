@@ -1,0 +1,13 @@
+'use client';
+import {useEffect,useRef,useState} from 'react';
+import {createPortal} from 'react-dom';
+import {FileText,X} from 'lucide-react';
+import './source-reference.css';
+type Source={id:string;text:string;role:string;conversationId:string};
+const label=(role:string)=>role==='gmail'?'Email':role==='discord'?'Discord message':role==='assistant'?'pebble’s reply':'Your message';
+function SourceDialog({id,onClose}:{id:string;onClose:()=>void}){
+ const dialog=useRef<HTMLDialogElement>(null);const[source,setSource]=useState<Source>();const[error,setError]=useState('');
+ useEffect(()=>{const element=dialog.current;element?.showModal();const controller=new AbortController();void(async()=>{try{const response=await fetch(`/api/runtime/source?id=${encodeURIComponent(id)}`,{cache:'no-store',signal:controller.signal});const value=await response.json();if(!response.ok||!value.source)throw Error(response.status===404?'This source is not available. It may not have been saved, or memory may need reconnecting.':value.error||'This source couldn’t load. Check the connection and try again.');if(typeof value.source.text!=='string'||typeof value.source.id!=='string')throw Error('This source returned an incomplete response.');if(!controller.signal.aborted)setSource(value.source);}catch(reason){if(!controller.signal.aborted)setError((reason as Error).message);}})();return()=>{controller.abort();element?.close();};},[id]);
+ return <dialog ref={dialog} className="pebble-source-dialog" aria-labelledby="pebble-source-title" onCancel={event=>{event.preventDefault();onClose();}} onClick={event=>{if(event.target===event.currentTarget)onClose();}}><article><header><div><span>ORIGINAL SOURCE</span><h2 id="pebble-source-title">{source?label(source.role):'Source reference'}</h2></div><button autoFocus type="button" aria-label="Close source" onClick={onClose}><X size={17}/></button></header>{error?<p role="alert">{error}</p>:source?<><p className="pebble-source-content">{source.text}</p><details><summary>Source details</summary><code>{source.id}</code><code>{source.conversationId}</code></details></>:<p role="status">Loading the saved source…</p>}</article></dialog>;
+}
+export function SourceReference({id}:{id:string}){const[open,setOpen]=useState(false);const trigger=useRef<HTMLButtonElement>(null);const close=()=>{setOpen(false);requestAnimationFrame(()=>trigger.current?.focus());};return <><button ref={trigger} type="button" className="pebble-source-reference" aria-label="Open saved source" onClick={()=>setOpen(true)}><FileText size={11} aria-hidden="true"/>Source</button>{open&&createPortal(<SourceDialog id={id} onClose={close}/>,document.body)}</>;}

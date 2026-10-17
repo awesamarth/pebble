@@ -15,6 +15,7 @@ return async (request:Request):Promise<Response>=>{
  try{
   if(request.method==='GET'){
    if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
+   if(path==='/source'){const source=await engine.source(new URL(request.url).searchParams.get('id')??'');return json({source},source?200:404);}
    if(path==='/notifications')return json(engine.notificationStatus());
    if(path==='/local-access')return json(engine.local.status());
    if(path==='/providers')return json(await engine.providerCatalog());
@@ -40,6 +41,8 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/local-access/revoke')return json(engine.local.revoke(body.id));
    if(path==='/local-access/approve')return json(engine.local.approve(body.id));
    if(path==='/local-access/reject')return json(engine.local.reject(body.id));
+   if(path==='/browser/start-research')return json(await engine.browser.startResearch(body.url));
+   if(path==='/browser/navigate-public')return json(await engine.browser.navigatePublic(body.url));
    if(path==='/browser/start')return json(await engine.browser.start());
    if(path==='/browser/resume')return json(await engine.browser.resume());
    if(path==='/browser/pause')return json(await engine.browserPause('pause'));
@@ -56,6 +59,9 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/integrations/gmail/search')return json(await integrations.gmail.searchMessages(body.query,body.maxResults??5));
    if(path==='/integrations/gmail/read')return json(await integrations.gmail.readMessage(body.id));
    if(path==='/integrations/gmail/start')return json(await integrations.gmail.beginOAuth());
+   if(path==='/integrations/gmail/pull/start')return json(await integrations.gmail.startPull());
+   if(path==='/integrations/gmail/pull/stop')return json(integrations.gmail.stopPull());
+   if(path==='/integrations/gmail/pull/check')return json(await integrations.gmail.pullOnce());
    if(path==='/integrations/gmail/watch')return json(await integrations.gmail.startWatch());
    if(path==='/integrations/gmail/sync')return json(await integrations.gmail.syncHistory());
    if(path==='/integrations/gmail/recover')return json(await integrations.gmail.resumeFromNow(body.consent===true));
