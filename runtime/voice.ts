@@ -1,5 +1,6 @@
 import {access,mkdtemp,readFile,rm,writeFile,stat} from 'node:fs/promises';
 import {constants} from 'node:fs';import {join,resolve} from 'node:path';import {tmpdir} from 'node:os';import {execFile} from 'node:child_process';import {promisify} from 'node:util';
+import {WhisperWorker} from './voice-whisper';
 const execute=promisify(execFile);
 export const voiceBodyLimit=3_000_000;
 export class VoiceError extends Error{}
@@ -10,7 +11,8 @@ export class LocalVoice{
  private model=process.env.PEBBLE_WHISPER_MODEL??resolve('../x402-media-studio/.runtime/models/ggml-small.bin');
  private ffmpeg=process.env.PEBBLE_FFMPEG_BIN??'/usr/local/bin/ffmpeg';
  async status(){const available=await Promise.all([this.binary,this.model,this.ffmpeg,'/usr/bin/say'].map(path=>access(path,path===this.model?constants.R_OK:constants.X_OK).then(()=>true,()=>false)));const ready=process.platform==='darwin'&&available.every(Boolean);return {ready,maxSeconds:30,localAudio:true,...(!ready?{issue:'Local speech tools are unavailable. Configure Whisper, its model, FFmpeg and macOS speech on this Mac.'}:{})};}
- async close(){this.lifetime.abort();await this.settling;}
+ private worker=new WhisperWorker(this.binary,this.model);
+ async close(){this.lifetime.abort();await this.settling;await this.worker.close();}
  private async task<T>(signal:AbortSignal|undefined,operation:(directory:string,signal:AbortSignal)=>Promise<T>):Promise<T>{
   if(signal?.aborted||this.lifetime.signal.aborted)fail('Voice processing stopped.');if(this.active)fail('A voice turn is already processing. Wait or end the call.');if(!(await this.status()).ready)fail('Local speech tools are unavailable. Check voice setup.');if(this.active)fail('A voice turn is already processing.');this.active=true;let settled!:()=>void;this.settling=new Promise(resolve=>{settled=resolve;});let directory:string|undefined;
   try{const combined=AbortSignal.any([this.lifetime.signal,AbortSignal.timeout(120000),...(signal?[signal]:[])]);combined.throwIfAborted();directory=await mkdtemp(join(tmpdir(),'pebble-voice-'));return await operation(directory,combined);}catch(error){if(error instanceof VoiceError)throw error;if(signal?.aborted||this.lifetime.signal.aborted)fail('Voice processing stopped.');return fail('Local voice processing could not finish. Try a shorter, clearer recording.');}finally{if(directory)await rm(directory,{recursive:true,force:true}).catch(()=>{});this.active=false;this.settling=undefined;settled();}
@@ -24,8 +26,9 @@ export class LocalVoice{
    await execute(this.ffmpeg,['-nostdin','-hide_banner','-loglevel','error','-y','-protocol_whitelist','file,pipe','-f',format,'-i',source,'-vn','-t','31','-ac','1','-ar','16000','-c:a','pcm_s16le',wav],{signal:abort,timeout:20000,maxBuffer:262144});
    if((await stat(wav)).size>30.5*32000+100)fail('Recordings are limited to 30 seconds.');
    const decoded=await readFile(wav);let offset=12,hasSamples=false;while(offset+8<=decoded.length){const length=decoded.readUInt32LE(offset+4);if(decoded.toString('ascii',offset,offset+4)==='data'){hasSamples=decoded.subarray(offset+8,Math.min(decoded.length,offset+8+length)).some(byte=>byte!==0);break;}offset+=8+length+(length%2);}if(!hasSamples)fail('No speech was recognized. Try speaking clearly for a few seconds.');
-   await execute(this.binary,['-m',this.model,'-f',wav,'-l','auto','-t','2','-ng','-nt','-otxt','-of',output],{signal:abort,timeout:90000,maxBuffer:1048576});
-   const text=(await readFile(output+'.txt','utf8')).trim().slice(0,16000);if(!text||/^\[(?:blank_audio|silence|music)\]$/i.test(text))fail('No speech was recognized. Try speaking clearly for a few seconds.');return {text};
+   const warmed=await this.worker.transcribe(wav,abort);
+   if(warmed===undefined)await execute(this.binary,['-m',this.model,'-f',wav,'-l','auto','-t','2','-ng','-nt','-otxt','-of',output],{signal:abort,timeout:90000,maxBuffer:1048576});
+   const text=(warmed??await readFile(output+'.txt','utf8')).trim().slice(0,16000);if(!text||/^\[(?:blank_audio|silence|music)\]$/i.test(text))fail('No speech was recognized. Try speaking clearly for a few seconds.');return {text};
   });
  }
  async speech(input:unknown,signal?:AbortSignal){
