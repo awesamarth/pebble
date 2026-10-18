@@ -87,6 +87,16 @@ export function assertPublicResearchUrl(input:string,resource=false):URL{
  const sensitive=/(?:^|[\/._-])(?:accounts?|log[\s_-]?(?:in|out)|sign[\s_-]?(?:in|out|up)|auth|authorize|oauth|sessions?|checkout|cart|payments?|purchases?|buy|orders?|transfer|withdraw|activate|revoke|delete|remove|unsubscribe|subscribe|confirm|approve|accept|reject|invite|send|submit|create|update|edit|settings|admin|api)(?:$|[\/._-])/i;
  if(path.includes('%')||!['http:','https:'].includes(url.protocol)||url.username||url.password||sensitive.test(path)||sensitive.test(url.hostname))throw new Error('This destination needs reviewed browsing or manual takeover.');
  const allowed=new Set(['q','query','search','page','p','sort','order','lang','hl','tab','filter','limit','offset']);
- for(const [key,value] of url.searchParams)if((!resource&&!allowed.has(key.toLowerCase()))||/token|password|secret|auth|code|api.?key|csrf|session|action|command|method|delete|submit|confirm|^do$/i.test(key)||value.length>500||/token|password|secret|api.?key|csrf|session/i.test(value))throw new Error('This query needs reviewed browsing. Use a public page or ordinary search query.');
+ // Google adds this opaque search-navigation identifier itself; it is not an account credential.
+ const googleSearch=/(^|\.)google\.com$/.test(url.hostname)&&url.pathname==='/search';
+ for(const [key,value] of url.searchParams)if((!resource&&!allowed.has(key.toLowerCase())&&!(googleSearch&&['sei','sg_ss'].includes(key)))||/token|password|secret|auth|code|api.?key|csrf|session|action|command|method|delete|submit|confirm|^do$/i.test(key)||value.length>(googleSearch&&key==='sg_ss'?4096:500)||/token|password|secret|api.?key|csrf|session/i.test(value))throw new Error('This query needs reviewed browsing. Use a public page or ordinary search query.');
  return url;
+}
+
+/** Remove only known analytics parameters; credentials and action parameters remain subject to rejection. */
+export function publicResearchDestination(input:string):URL{
+ let url=new URL(input);
+ if(/(^|\.)google\.com$/.test(url.hostname)&&url.pathname==='/url'){const destination=url.searchParams.get('q')??url.searchParams.get('url');if(destination)url=new URL(destination);}
+ for(const key of [...url.searchParams.keys()])if(/^utm_/i.test(key)||['srsltid','gclid','fbclid','msclkid'].includes(key.toLowerCase()))url.searchParams.delete(key);
+ return assertPublicResearchUrl(url.toString());
 }

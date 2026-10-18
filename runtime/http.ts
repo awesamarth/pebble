@@ -51,7 +51,7 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/browser/stop')return json(await engine.browserPause('stop'));
    if(path==='/browser/observe')return json(await engine.browser.observe());
    if(path==='/browser/scroll')return json(await engine.browser.scroll(body.direction,body.amount));
-   if(path==='/browser/action')return json(await engine.browser.propose(body.action,body.revision));
+   if(path==='/browser/action')return json(await engine.browser.act(body.action,body.revision));
    if(path==='/browser/approve')return json(await engine.browser.approve(body.id,body.digest));
    if(path==='/browser/reject')return json(engine.browser.reject(body.id));
    if(path==='/browser/screenshot'){await engine.browser.screenshot();return json(engine.browser.screenshotPreview());}

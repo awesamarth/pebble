@@ -43,3 +43,10 @@
 .ws-composer>button{align-self:flex-end}
 
 .workspace .ws-provider-choice{margin-top:24px}
+
+/* Muted olive scrollbars across workspace panels and the document. */
+html.pebble-workspace,.workspace *{scrollbar-width:thin;scrollbar-color:#a8b398 #efeee5}
+html.pebble-workspace::-webkit-scrollbar,.workspace ::-webkit-scrollbar{width:8px;height:8px}
+html.pebble-workspace::-webkit-scrollbar-track,.workspace ::-webkit-scrollbar-track{background:#efeee5}
+html.pebble-workspace::-webkit-scrollbar-thumb,.workspace ::-webkit-scrollbar-thumb{background:#a8b398;border:2px solid #efeee5;border-radius:99px}
+html.pebble-workspace::-webkit-scrollbar-thumb:hover,.workspace ::-webkit-scrollbar-thumb:hover{background:#7d8e6e}

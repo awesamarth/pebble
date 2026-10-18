@@ -13,7 +13,7 @@ The local path uses manual incremental checks. No Pub/Sub topic, service account
    Do not substitute localhost, a different port, `/home`, or the push URL. The app accepts only this redirect. JavaScript origins are not used by the server-side OAuth flow.
 4. In local pebble, open **Apps & actions → Connections → Gmail**. Enter **Google OAuth client ID** and **Google OAuth client secret** locally. Do not paste either secret or an authorization code into chat.
 5. Select **Save senders, subjects and dates from new inbox emails**. Leave **Include full email text** and **Allow sending emails I approve** off unless wanted. Leave **Advanced: automatic email updates** blank.
-6. Select **Save Gmail setup → Get Google sign-in link → Continue to Google**, choose your account and review Google’s grant. Google may show an unverified-app warning for your own test app; confirm the project/account is yours before proceeding.
+6. Select **Save Gmail setup → Continue to Google**, which opens Google in a new tab. Choose your account and review Google’s grant. Google may show an unverified-app warning for your own test app; confirm the project/account is yours before proceeding.
 7. After return, select **Check new changes**. On a first connection there is no import of older mail: the baseline is the account’s current history position. After a new message reaches INBOX, check again; it appears under **Incoming**. A connected AI model is not required for this check. Use **Use in conversation** to discuss a saved message; that sends its visible content to the selected model when you send the chat.
 
 ## What access and storage mean
@@ -22,7 +22,7 @@ Default OAuth permission is `gmail.readonly`, which grants broader mailbox read 
 
 Client secret, access token and refresh token are currently session-only. Reenter client settings and reconnect after owner restart. Account-scoped history cursors and saved messages persist locally; sources also sync when memory is connected. Reconnecting the same account resumes its saved cursor if Gmail still retains that history. Google’s Testing-mode refresh tokens can expire after seven days for these scopes. Disconnect clears the local session; revoke access separately in your Google account if desired.
 
-An expired history position requires explicit **Skip the gap & resume from now**. That skips unavailable updates; pebble never silently imports the whole mailbox. This implementation is designed for new messages entering INBOX; it is not an archive importer or background polling service. Manual checks run only when requested. No Gmail connection or live mailbox test was performed by the implementation agent.
+An expired history position requires explicit **Skip the gap & resume from now**. That skips unavailable updates; pebble never silently imports the whole mailbox. This implementation is designed for new messages entering INBOX; it is not an archive importer or background polling service. Manual checks run only when requested. Live Google OAuth and Gmail profile connection succeeded on the development Mac after Gmail API was enabled and the account was included as a test user. Read/send grant availability was confirmed through safe status fields. No mailbox contents were read and no email was sent during that check.
 
 ## Asking pebble to find an email
 
@@ -64,3 +64,8 @@ A connection/watch success alone does not prove public delivery. Verify that Inc
 - **Turn on email updates** fails with blank advanced fields: use **Check new changes** instead; choose manual checks or complete the selected pull/push Cloud setup.
 
 Official references: [Google web OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Gmail incremental sync](https://developers.google.com/workspace/gmail/api/guides/sync), [Gmail push](https://developers.google.com/workspace/gmail/api/guides/push).
+
+
+## Callback diagnostics
+
+The callback returns only fixed error categories to the local UI, never the authorization code, state, token or raw Google response. The runtime preserves one-use state/PKCE checks. A failed callback must use a fresh sign-in attempt; do not replay a used callback URL. The Continue button opens Google from the user gesture, reuses an ongoing sign-in tab, and can retry after that tab returns to pebble. OAuth app publication and extra scopes are unnecessary for a correctly configured test account.
