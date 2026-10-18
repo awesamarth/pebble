@@ -7,5 +7,5 @@
 .ws-integrations .gmail-connected-controls small{font-size:11px;line-height:1.7;color:#647356;margin:0;white-space:normal}
 .ws-integrations .gmail-connected-controls>button{min-height:44px;font-size:11px;white-space:normal;text-align:left;line-height:1.5}
 .ws-integrations .gmail-connected-controls .gmail-sync-button{justify-content:center;gap:9px}
-.ws-integrations .gmail-connected-controls .gmail-disconnect-button{border-top:1px solid #e2ddd1;padding:16px 0 2px;margin-top:2px;color:#925b48;justify-content:flex-start;text-decoration:underline;text-underline-offset:3px}
+.ws-integrations .gmail-connected-controls .gmail-disconnect-button{border:1px solid #dfc9bd;border-radius:6px;padding:12px;margin-top:2px;color:#925b48;justify-content:flex-start;text-decoration:underline;text-underline-offset:3px}
 .ws-integrations .gmail-connected-controls svg,.ws-integrations .gmail-connected-controls .status-dot{flex-shrink:0}
