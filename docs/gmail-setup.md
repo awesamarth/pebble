@@ -72,3 +72,11 @@ The callback returns only fixed error categories to the local UI, never the auth
 
 
 Secure-persistence verification uses synthetic OAuth responses and an injected in-memory vault only. It covers opt-in/config-only saving, restored permissions, token rotation, disconnect erasure, locked-vault failures and absence of secrets in SQLite/status. No real Gmail token was read or saved during this implementation. Activating the new backend requires an owner-approved restart; storing a real connection requires the owner to select Remember Gmail, save setup and complete Google sign-in. Existing session-only tokens lost in a previous restart cannot be recovered by this change.
+
+## Approve a prepared message in chat
+
+Ask pebble to prepare an email. Its committed draft result appears directly in Conversation with **From**, **To**, **Subject** (including an empty-subject marker), the complete **Body** and the draft ID. Nothing is sent at this stage. Reply **yeah send** to send the single displayed pending draft, or **send draft <ID>** when several are pending. Changes require a new draft. Apps & actions remains an optional alternate review surface.
+
+The private `pebble_message_approve` tool requires a new explicit owner approval and binds it to a draft ID/digest shown before that owner turn. Imported/page text, the original drafting request, modified wording, expired reviews and consumed approvals cannot authorize a send. It calls the same immutable, one-use `IntegrationService.approve` gate used by the review button. Success or an unclear delivery result is displayed in chat; failures are visible and uncertain sends are never retried automatically. Draft and outcome notices are derived from committed tool-result entries, so SSE updates and restored history show the same content even when the tool terminates the model turn.
+
+Synthetic Harness tests cover visible draft details, a later chat approval, one fake send, duplicate approval/request rejection and restored notices. They do not send to a real recipient. Backend activation requires a coordinated owner restart; this code change does not consume existing pending reviews.

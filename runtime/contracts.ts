@@ -1,7 +1,7 @@
 export type ChatImageInput={name:string;mimeType:'image/png'|'image/jpeg'|'image/webp';data:string};
 export type PebbleLook={name:string;color:string;eyes:string;glasses:string;expression:string};
 export const defaultLook:PebbleLook={name:'bunty',color:'#a9b4c8',eyes:'Dot',glasses:'None',expression:'Content'};
-export type ChatMessage={id:string;role:'user'|'assistant';text:string;failed?:boolean;timestamp?:number;images?:ChatImageInput[]};
+export type ChatMessage={id:string;role:'user'|'assistant';text:string;failed?:boolean;timestamp?:number;images?:ChatImageInput[];approval?:{id:string;digest:string}};
 export type RuntimeView={messages:ChatMessage[];partial:string;busy:boolean;context?:{state:'summarizing'|'retrying'|'failed';blocking:boolean};error?:string};
 export type RuntimeStatus={profile:PebbleLook|null;provider:{id?:import('./model-providers').ApiProvider;connectionId?:import('./model-providers').ConnectionId;state:'setup_required'|'configured'|'verified';method:'api_key'|'oauth'|null;persistence?:import('./credentials').PersistenceStatus;model:string;supportsImages?:boolean;reasoning?:import('@earendil-works/pi-ai').ModelThinkingLevel};memory:{connection?:import('./memory-display').MemoryConnectionSummary;state:'setup_required'|'configured'|'connected'|'unavailable';detail:string;editable?:boolean;retrieval?:{semantic:string;indexing?:boolean;model?:string;indexed:number;maxDepth:number;issue?:string;last?:{durationMs:number;semanticSeeds:number;lexicalSeeds:number;maxDepth:number;visited:number;truncated:boolean}}};runtime:{version:string;storage:string};ready:boolean};
 export type OAuthView={state:'idle'|'waiting'|'connected'|'error';url?:string;message?:string;manual?:boolean};
