@@ -34,3 +34,10 @@ test('one persistent browser supports searches, normal forms, cookies, tabs and 
  await expect(browser.navigate('http://127.0.0.1:7341')).rejects.toThrow();await expect(browser.navigate(origin+'/?access_token=synthetic')).rejects.toThrow('Credential');
  }finally{await browser.close();fixture.stop(true);await rm(dir,{recursive:true,force:true});}
 },40000);
+
+test('pause and stop do not wait behind an unresponsive driver operation; close timeout releases handoff',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'pebble-control-recovery-'));const browser=new BrowserController(dir);const state=browser as unknown as {context:unknown;mode:string;queue:Promise<unknown>;reviews:{close:()=>void}};
+ try{state.context={close:async()=>{}};state.mode='agent';state.queue=new Promise(()=>{});const started=performance.now();expect((await browser.pause()).mode).toBe('paused');expect(performance.now()-started).toBeLessThan(100);expect((await browser.stop()).mode).toBe('stopped');
+  state.context={close:()=>new Promise(()=>{})};state.mode='agent';await expect(browser.takeover()).rejects.toThrow('did not respond');expect(browser.status().mode).toBe('paused');expect(browser.status().issue).toContain('no action was retried');state.context={close:async()=>{}};expect((await browser.stop()).mode).toBe('stopped');
+ }finally{state.context=undefined;state.queue=Promise.resolve();await browser.close();await rm(dir,{recursive:true,force:true});}
+},6000);

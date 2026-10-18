@@ -6,6 +6,8 @@ Start opens hidden Chromium under manual ownership. Resume enables agent control
 
 Open window hands this dedicated profile to the owner for login or manual work. Resume closes the visible context and opens it hidden again. Cookies and persistent site storage survive; unfinished forms, session storage, JavaScript state and scroll positions may reset. Tabs reopen at their previous addresses, which makes fresh navigation requests. Every handoff invalidates refs and pending reviews; uncertain actions are never replayed. This is a practical context handoff, not an embedded remote desktop.
 
+Pause revokes agent control immediately rather than waiting for a page operation. Window handoff and Stop close the old context before releasing its action queue; a nonresponsive close returns an error after three seconds and keeps control paused. A stalled model cancellation cannot hold the browser-control response open. No pending mutation is replayed.
+
 ## Tools and actions
 
 The private owner request receives seven tools: `pebble_browser_start`, `pebble_browser_navigate`, observe, screenshot, tabs, scroll and action. Observations return bounded untrusted page text and short-lived element refs. Search URL parameters are preserved, including YouTube `search_query` and arbitrary ordinary parameters. Account pages and normal HTTP methods are supported. Existing site permissions are unchanged.
