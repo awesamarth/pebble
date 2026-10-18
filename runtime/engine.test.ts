@@ -44,3 +44,22 @@ test('automatic Pi compaction reports progress and retains restored history',asy
   await Bun.sleep(50);expect(summaries).toBeGreaterThan(0);expect(states.some(s=>s.state==='summarizing'&&s.blocking)).toBe(true);expect(JSON.stringify(states)).not.toContain('error');expect(engine.snapshot().messages.filter(m=>m.role==='user')).toHaveLength(2);unsubscribe();await engine.close();engine=await Engine.open(dir,models);expect(engine.snapshot().messages.filter(m=>m.role==='user')).toHaveLength(2);
  }finally{unsubscribe();await engine.close();await rm(dir,{recursive:true,force:true});}
 },15000);
+
+test('chat acceptance does not wait for expired model catalog refresh (isolated actual Harness)',async()=>{
+ const {AccountModelCatalog}=await import('./provider-models');let now=0,catalogCalls=0,released=false;let refreshResolve!:(response:Response)=>void;
+ const catalog=new AccountModelCatalog((async()=>{catalogCalls++;if(catalogCalls===1)return Response.json({data:[{id:'gpt-6-sol'}]});return new Promise<Response>(resolve=>{refreshResolve=resolve;});}) as unknown as typeof fetch,()=>now);
+ const models=createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}}),base=openaiProvider();let generations=0;
+ models.setProvider({...base,auth:{apiKey:{name:'isolated',resolve:async()=>({auth:{apiKey:'synthetic-catalog-key'}})}},streamSimple:model=>{generations++;const events=createAssistantMessageEventStream();const message:AssistantMessage={role:'assistant',content:[{type:'text',text:'SYNTHETIC CATALOG RESPONSE'}],provider:'openai',api:'openai-responses',model:model.id,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'stop',timestamp:Date.now()};queueMicrotask(()=>events.push({type:'done',reason:'stop',message}));return events;}});
+ const connection:GraphConnection={run:async query=>query==='RETURN 1 AS ok'?[{ok:1}]:[],close:async()=>{}};
+ const directory=await mkdtemp(join(tmpdir(),'pebble-send-catalog-'));const engine=await Engine.open(directory,models,()=>new GraphMemory(config,async()=>connection),undefined,undefined,catalog);
+ try{
+  engine.saveProfile(defaultLook);await engine.setKey('synthetic-catalog-key','gpt-6-sol','openai','medium');await engine.connectMemory(config);now=300001;
+  const start=performance.now();const result=await Promise.race([engine.send('Synthetic catalog check only','catalog-timing-check-1'),Bun.sleep(2000).then(()=>{throw Error('Send waited for held catalog refresh');})]);
+  console.log(`actual Harness acceptance with unresolved catalog refresh: ${(performance.now()-start).toFixed(1)} ms`);
+  expect(result.submissionId).toBeTruthy();expect(catalogCalls).toBe(2);expect(released).toBe(false);
+  refreshResolve(Response.json({data:[{id:'gpt-6-sol'}]}));released=true;
+  for(let i=0;i<100&&engine.snapshot().busy;i++)await Bun.sleep(10);
+  expect(engine.snapshot().messages.filter(m=>m.role==='user')).toHaveLength(1);expect(generations).toBe(1);expect(engine.generation()).toEqual({model:'gpt-6-sol',reasoning:'medium'});
+  const again=await engine.send('Synthetic catalog check only','catalog-timing-check-1');expect(again.submissionId).toBe(result.submissionId);expect(generations).toBe(1);
+ }finally{if(!released&&refreshResolve)refreshResolve(Response.json({data:[{id:'gpt-6-sol'}]}));await engine.close();await rm(directory,{recursive:true,force:true});}
+},15000);

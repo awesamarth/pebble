@@ -61,3 +61,12 @@ html.pebble-workspace::-webkit-scrollbar-thumb:hover,.workspace ::-webkit-scroll
 
 .workspace .private-work,.workspace .local-access,.workspace .discord-notifications{width:calc(100% - 10%);max-width:920px;margin-inline:auto}
 @media(max-width:600px){.workspace .private-work,.workspace .local-access,.workspace .discord-notifications{width:88%;margin-inline:auto}}
+
+/* Size desktop chat from the real header/footer, including notices and composer. */
+@media(min-width:601px){
+ .workspace:has(>.ws-sidebar nav>button:first-child.chosen) .ws-content{height:100dvh;min-height:440px}
+ .workspace:has(>.ws-sidebar nav>button:first-child.chosen) .ws-conversation{height:auto;min-height:0;flex:1 1 0}
+ .ws-header,.ws-footer,.ws-chat-heading,.ws-content>.ws-error,.ws-content>.ws-notice{flex-shrink:0}
+ .ws-messages{min-height:0}
+ .ws-sidebar{overflow-y:auto}
+}
