@@ -40,7 +40,7 @@
 .ws-message.user{width:fit-content;max-width:min(85%,640px)}.ws-message.user p{margin:6px 0 0}.ws-message-meta>span{font-size:9px;letter-spacing:.5px}.ws-composer-area{flex-shrink:0}
 @media(max-width:600px){.ws-message.user{max-width:93%}}
 
-.ws-composer>button{align-self:flex-end}
+.ws-composer>button{align-self:flex-end;padding:0;line-height:1}.ws-composer>button svg{display:block}
 
 .workspace .ws-provider-choice{margin-top:24px}
 
