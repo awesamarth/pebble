@@ -9,7 +9,7 @@ type Access={grants:Grant[];commandAvailable:boolean;commandIssue?:string;review
 const reviewLabels:Record<string,string>={pending:'Needs your review',awaiting_approval:'Needs your review',approved:'Approved',running:'Running',completed:'Completed',rejected:'Declined',failed:'Couldn’t complete',expired:'Expired',unknown:'Interrupted — check the result'};
 const date=(at:number)=>Number.isFinite(at)?new Date(at).toLocaleString():'';
 export default function LocalAccess(){
- const[data,setData]=useState<Access>();const[path,setPath]=useState('');const[write,setWrite]=useState(false);const[commands,setCommands]=useState(false);const[error,setError]=useState('');const[notice,setNotice]=useState('');const[loadError,setLoadError]=useState('');const[busy,setBusy]=useState('');const[refreshing,setRefreshing]=useState(false);
+ const[data,setData]=useState<Access>();const[path,setPath]=useState('');const[write,setWrite]=useState(false);const[commands,setCommands]=useState(false);const[error,setError]=useState('');const[notice,setNotice]=useState('');const[loadError,setLoadError]=useState('');const[busy,setBusy]=useState('');const[refreshing,setRefreshing]=useState(false);const[picking,setPicking]=useState(false);
  const focusInput=useRef(false);const mounted=useRef(false);const request=useRef<AbortController|null>(null);const acting=useRef(false);const input=useRef<HTMLInputElement>(null);
  const refresh=useCallback(async()=>{
   if(request.current||acting.current)return;
@@ -25,15 +25,22 @@ export default function LocalAccess(){
   catch(reason){if(mounted.current)setError(reason instanceof Error?reason.message:'This change couldn’t be confirmed. Refresh to check before trying again.');}
   finally{acting.current=false;if(mounted.current){setBusy('');void refresh();}}
  }
- useEffect(()=>{if(!busy&&focusInput.current){focusInput.current=false;input.current?.focus();}},[busy]);
- const validPath=path.trim().startsWith('/')&&path.trim()!=='/';const disabled=!!busy||!data;
- return <section className="local-access" aria-labelledby="local-access-title" aria-busy={!!busy}>
+ useEffect(()=>{if(!busy&&!picking&&focusInput.current){focusInput.current=false;input.current?.focus();}},[busy,picking]);
+ async function chooseFolder(){
+  if(acting.current||picking)return;setPicking(true);setError('');setNotice('');
+  try{const response=await fetch('/api/local-access/choose-folder',{method:'POST',headers:{'Content-Type':'application/json','X-Pebble-User-Action':'choose-folder'},body:'{}'});const value=await response.json().catch(()=>null);if(!response.ok)throw Error(value?.error||'The folder chooser couldn’t open. Try again or enter a folder path.');if(!mounted.current)return;if(value?.cancelled){setNotice('No folder selected. Your access settings haven’t changed.');return;}if(typeof value?.path!=='string'||!value.path.startsWith('/')||value.path==='/'||value.path.includes('\0'))throw Error('The folder chooser didn’t return a folder path. Try again or enter it below.');setPath(value.path);focusInput.current=true;setNotice('Folder selected. Choose its permissions, then allow access below.');}
+  catch(reason){if(mounted.current)setError(reason instanceof Error?reason.message:'The folder chooser couldn’t open. Try again or enter a folder path.');}
+  finally{if(mounted.current)setPicking(false);}
+ }
+ const validPath=path.trim().startsWith('/')&&path.trim()!=='/';const disabled=!!busy||picking||!data;
+ return <section className="local-access" aria-labelledby="local-access-title" aria-busy={!!busy||picking}>
   <header className="local-access-heading"><div><span className="eyebrow">ON THIS MAC</span><h2 id="local-access-title"><FolderOpen size={18} aria-hidden="true"/>Local access</h2></div><button className="ws-text-button" disabled={!!busy||refreshing} onClick={()=>void refresh()}><RefreshCw size={13} aria-hidden="true"/>{refreshing?'Refreshing…':'Refresh'}</button></header>
   <p>Choose a folder your pebble can use. Nothing is accessible until you add a folder. Files it reads may be sent to your selected AI provider.</p>
   {(error||loadError)&&<p className="local-access-error" role="alert">{error||loadError}</p>}{notice&&<p className="local-access-notice" role="status">{notice}</p>}{busy&&<p role="status">{busy==='grant'?'Saving folder access…':busy==='revoke'?'Removing folder access…':'Submitting your command review…'}</p>}
   {!data&&!loadError&&<p role="status">Checking folder access…</p>}
   <form onSubmit={event=>{event.preventDefault();if(validPath&&!disabled)void act('grant',{path:path.trim(),write,commands:commands&&data?.commandAvailable===true},'Folder access saved. Check its permissions below.');}}>
-   <label htmlFor="local-folder">Folder path</label><input ref={input} id="local-folder" value={path} onChange={event=>setPath(event.target.value)} placeholder="/Users/you/Documents/project" autoComplete="off" spellCheck={false} disabled={disabled} aria-describedby="local-folder-help"/>
+   <div className="local-folder-picker"><button type="button" className="ws-secondary" onClick={()=>void chooseFolder()} disabled={disabled} aria-describedby="local-picker-help"><FolderOpen size={15} aria-hidden="true"/>{picking?'Choosing folder…':'Choose folder'}</button><small id="local-picker-help" role={picking?'status':undefined}>{picking?'Choose a folder in the Mac dialog, or cancel to keep your current choice.':'Choosing a folder doesn’t grant access or upload its files.'}</small></div>
+   <label htmlFor="local-folder">Folder path (or enter manually)</label><input ref={input} id="local-folder" value={path} onChange={event=>setPath(event.target.value)} placeholder="/Users/you/Documents/project" autoComplete="off" spellCheck={false} disabled={disabled} aria-describedby="local-folder-help"/>
    <small id="local-folder-help">{path&&!validPath?'Enter a full folder path beginning with /, rather than the whole Mac.':'Use the full path to one folder. Reading files is included.'}</small>
    <label className="local-access-check"><input type="checkbox" checked={write} onChange={event=>setWrite(event.target.checked)} disabled={disabled}/>Allow editing and creating files</label>
    <label className="local-access-check"><input type="checkbox" checked={commands} onChange={event=>setCommands(event.target.checked)} disabled={disabled||!data?.commandAvailable} aria-describedby="local-command-help"/>Allow commands, with a review each time</label>

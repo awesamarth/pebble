@@ -19,3 +19,9 @@ Commands can modify their disposable copy only; nothing is copied back. No packa
 ## Evidence
 
 `bun test runtime/local-access.test.ts runtime/engine-local.test.ts` exercises actual Pi tools/Harness using disposable fixtures and a synthetic model: discovery, read, edit, create, repeated-grant use, persistence, revocation, known credential patterns, symlinks/hardlinks, outside paths, cancellation and actual macOS command isolation. UI tests intercept all runtime requests; they never grant access to personal folders. No real personal files are inspected for tests.
+
+## Native folder selection
+
+Local access includes **Choose folder** on macOS, with manual path entry as a fallback. The native dialog returns one validated existing folder path; it does not read files or grant access. Choose the permissions and submit **Allow access** separately. Cancellation keeps the previous path and permissions. Hidden, credential, system, whole-home and symlink paths are rejected; the existing grant endpoint remains the final authority.
+
+The Next route `/api/local-access/choose-folder` accepts only an explicit same-origin local POST with `X-Pebble-User-Action: choose-folder`. It invokes a fixed AppleScript with no path interpolation, allows one dialog at a time and times out after two minutes. No model tool can invoke this route. Tests exercise request validation, path selection, cancellation, overlapping requests and invalid paths through an injected selector. A headless UI check mocked selection/cancellation, confirmed no automatic grants and no mobile overflow. Native dialog presentation has not been invoked during verification to avoid opening windows on the owner's desktop.
