@@ -7,7 +7,7 @@ docker compose -f compose.falkordb.yml up -d
 docker compose -f compose.falkordb.yml stop
 ```
 
-Do not remove the named volume. No private data has been connected or imported. Health checks verified PONG, the graph module, empty GRAPH.LIST, actual persistence directory/settings and the localhost-only port mapping. No graph or fixture data was created.
+Install and start [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/) first. From the pebble repository root, `docker info` and `docker compose version` should succeed before running the commands above. Use `docker compose -f compose.falkordb.yml ps` to inspect container health. The first start downloads the pinned image. Do not remove the named volume if you want to retain your saved graph.
 
 When the user explicitly wants to connect and sync data, enter these in Setup & connections → Connect memory:
 
@@ -18,7 +18,7 @@ When the user explicitly wants to connect and sync data, enter these in Setup & 
 - Encrypted connection: off (the connection stays on loopback)
 - Create a pebble workspace in this database: select for first setup
 
-Connecting the owner triggers its existing source-sync queue. That can copy already-saved conversations and Discord messages into the database, so database preparation has deliberately stopped before that step. Get the user’s explicit go-ahead to connect/sync; initializing an empty workspace alone does not make that source import optional. Other local processes can access this unauthenticated local development service. Adding database authentication requires a separate credential configuration step; no credentials were generated or read.
+Choosing Connect & check memory triggers the source-sync queue and can copy eligible saved conversations and selected app messages into this database. Starting the container alone does not connect the application or import sources. Other local processes can access this unauthenticated loopback development service. Use your own authenticated server settings for a different deployment; authentication is not configured by this compose file.
 
 Official references: [Docker deployment](https://docs.falkordb.com/operations/docker), [persistence](https://docs.falkordb.com/operations/durability/persistence). The current server-only image’s observed data directory was checked rather than assuming the documentation’s /data example.
 

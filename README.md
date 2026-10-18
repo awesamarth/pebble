@@ -4,17 +4,25 @@ A local personal assistant with a character you name, durable conversations, sou
 
 ## Run locally
 
+The alpha targets **macOS**. Development checks used Bun **1.3.14**; other hosts and a clean Mac install have not been verified. Install [Apple Command Line Tools](https://developer.apple.com/xcode/resources/) (`xcode-select --install`) for Git, Swift sentence embeddings and optional native voice builds. Install [Bun](https://bun.com/docs/installation), then open a new terminal and check `bun --version`. To reproduce the tested Bun version, the official installer accepts `curl -fsSL https://bun.com/install | bash -s "bun-v1.3.14"`.
+
+For a local graph, install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/) and start it; `docker info` and `docker compose version` should succeed. A reachable FalkorDB Cloud/server can replace Docker. A model account/API key and internet access are needed for chat; optional voice has separate [local setup](docs/local-voice.md#install-on-a-fresh-mac).
+
 ```sh
-bun install
+git clone https://github.com/awesamarth/pebble.git
+cd pebble
+bun install --frozen-lockfile
+# Required for browser tools; installs Playwright's matching Chromium.
+bunx playwright install chromium
 # Optional local FalkorDB; alternatively configure your own Cloud/server graph.
 docker compose -f compose.falkordb.yml up -d
 # Terminal one: one process owns durable storage
 bun run runtime
-# Terminal two
+# Terminal two: open another terminal and cd into the same pebble clone
 bun run dev --port 7341
 ```
 
-Open http://127.0.0.1:7341/home. The owner binds only `127.0.0.1:7342`; the proxy accepts `localhost:7341` / `127.0.0.1:7341`. Check ports first; do not kill unrelated listeners. Port 3000 is not used.
+Open http://127.0.0.1:7341/home. The owner binds only `127.0.0.1:7342`; the proxy accepts `localhost:7341` / `127.0.0.1:7341`. Check ports first; do not kill unrelated listeners. Port 3000 is not used. Keep both terminals running. Stop each with Ctrl-C when finished; start them again from the repository root. If configuring optional voice, export its three tool-path variables in terminal one **before** starting the runtime. Reconnecting a session-only account can be necessary after a runtime restart.
 
 1. Save your character.
 2. Sign in with ChatGPT, or configure your own OpenAI, Anthropic, Google/Gemini or supported OpenRouter API key/model. API inference may incur the selected provider's charges. ChatGPT uses a fresh app-specific device UUID, not imported Codex credentials; its callback uses port 1455.
@@ -30,13 +38,13 @@ On macOS, supported provider credentials use the OS Keychain. Discord token pers
 | Assistant execution | Real Pi Durable Harness; streamed committed replies, SQLite history, abort/resume, task persistence, native tools and automatic compaction. Compaction status is visible; a real Harness test verifies original history after compaction/reopen. |
 | FalkorDB memory | Source-backed facts, Person/Project links, hybrid local semantic/lexical retrieval and configurable multi-hop context. Inspect sources, edit/delete facts, reject stale edits and reconnect across sessions. Real database and real-model synthetic-data checks passed. **[Graph model, actual queries and decision evidence](docs/graph-memory.md).** |
 | Local files and private work | Explicit folder grants; Pi-native read/create/edit, file/text search and bounded private background tasks. Real-model synthetic file read/edit/create checks passed. Optional commands require exact review and run in disposable copies. No folders are granted by default. |
-| Public browser research | Actual sandboxed hidden Chromium with a fresh anonymous profile, public navigation/link following, observations and optional screenshots. A live Noida-events task returned five dated source links. Routine navigation and ordinary links run without per-click review. Account browsing uses a separate profile; consequential changes require review. [Limits](docs/browser.md). |
-| In-app voice | Local Whisper transcription → existing Pi conversation/tools/memory → macOS speech file. Record/Stop/End controls; playback only on user action. Synthetic audio through the real model and restored text history passed. Owner microphone/acoustic/playback verification remains pending. Requires existing local speech tools; no automatic download or cloud audio fee. [Setup and limits](docs/local-voice.md). |
+| Browser | One dedicated persistent Chromium profile for searches, navigation, tabs, ordinary clicks/forms and authorized signed-in browsing. Hidden execution and a user-controlled window share that profile; consequential changes retain action-specific reviews. Isolated real-browser/model checks passed, including YouTube trailer search; this does not prove every website works. [Controls and limits](docs/browser.md). |
+| In-app voice | Hands-free alpha: Start call requests microphone access; speech/silence detection submits local Whisper transcripts to the existing Pi conversation. Completed replies play automatically; speaking can interrupt. End stops capture/playback. Batch transcription adds delay; this is not streaming speech-to-speech. Synthetic pipeline and mocked interaction checks passed; real acoustic testing remains pending. [Install and limits](docs/local-voice.md). |
 | Discord | Owner-scoped mentions, channel memory/history, ordinary replies, private-work handoff and opt-in requested reminders/completion notices. A saved bot connection is operational on the development Mac; fresh clones require their own bot setup. Delivery/notification regressions use isolated transports. No private channel IDs or tokens are included. |
 | Gmail | OAuth, bounded mailbox search/read, summary/reply context handoff, reviewable outbound messages and incremental intake via manual checks, local Pub/Sub pull or authenticated hosted push. Google OAuth and Gmail profile connection verified on the development Mac, with approved read/send scopes. Mailbox content search/read and sending remain unverified live; fixture checks cover them. Fresh setups require Google consent. |
 | Character and chat UI | Original parameterized SVG customizer, accessible controls, local persistence, safe Markdown, code highlighting/copy, tables, source inspection and bounded image inputs. Desktop/mobile checks passed. |
 
-Voice is turn-based, not phone/SMS or a continuous interruptible realtime call. There is no multi-user hosting, recurring autonomous monitor or full desktop control. Reviews remain for consequential sends/actions; ordinary authorized reads/searches/public research do not require repeated approval. See [current status](docs/product-status.md) and [execution boundaries](docs/assistant-capabilities.md). Landing illustrations remain a design preview; the workspace is the functional application.
+Voice uses local batch recognition with hands-free turn detection and interruption; it is not phone/SMS or streaming realtime speech-to-speech. There is no multi-user hosting, recurring autonomous monitor or full desktop control. Reviews remain for consequential sends/actions; ordinary authorized reads/searches/public research do not require repeated approval. See [current status](docs/product-status.md) and [execution boundaries](docs/assistant-capabilities.md). Landing illustrations remain a design preview; the workspace is the functional application.
 
 ## Graph and verification
 
@@ -83,3 +91,7 @@ Checks include isolated model/provider transports and actual local Chromium/Falk
 ## Assets and project scope
 
 Original SVG/design; Lucide icons (ISC); DM Sans/Manrope (SIL Open Font License) with system/Georgia fallbacks. No paid assets or hosted audio provider are needed. This is a local single-owner application, not a public multi-user service. Follow [project workflow](AGENTS.md) and [UI copy guidance](docs/ui-copy.md).
+
+## AI-assisted development
+
+pebble was developed with AI assistance using OpenAI Codex for implementation, debugging, tests, documentation and research. The repository contains AI-assisted code and writing. Verification results and remaining limitations are described above; AI assistance is not evidence that an untested flow works.
