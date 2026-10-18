@@ -14,9 +14,7 @@ The incoming feed currently lists imported external messages. Discord ignores bo
 
 ## Voice
 
-Current code has no microphone capture, audio playback/session transport, WebRTC or realtime voice implementation. The landing-page call preview is a product concept. Ordinary chat model selection explicitly excludes audio, transcription and realtime models.
-
-The next concrete dependency is a selected audio-capable provider/authentication path and transport, followed by an explicit microphone-permission flow, capture/playback UI, session cancellation and a bridge to existing owner tools and memory. The existing ChatGPT text OAuth integration does not implement audio transport. Phone and SMS are outside scope.
+Local turn-based voice is implemented in Conversation → Voice call. Explicit Record requests microphone permission; Stop & send uses local Whisper and submits recognized text into the existing Pi conversation. macOS speech generates a reply file silently; playback requires user action. No external audio provider or new subscription is used. See local-voice.md for tools, limits, verification and the remaining owner microphone/playback check. Phone/SMS and continuous realtime interruption remain outside this implementation.
 
 ## Email verification boundary
 
@@ -29,11 +27,6 @@ The real installed Pi harness automatically compacted a synthetic conversation u
 
 A separate actual Engine reopen check used a disposable real FalkorDB graph. The saved passwordless graph configuration reconnected automatically, a Lantern query retrieved the related Mira preference, and exact saved-source lookup still worked. No live account, private data, personal graph or model request was used. The graph and temporary storage were deleted. Headless Chrome with intercepted APIs verified background/blocking/retry/failure messages, source dialog behavior and existing desktop/mobile Markdown safety.
 
-## Smallest calling implementation, pending owner choices
+## Calling implementation decision
 
-1. Select the audio transport/authentication path supported by the owner's chosen provider. Do not assume the current text OAuth grant includes audio endpoints or introduce a paid provider/key implicitly.
-2. Add an explicit in-app start-call action and microphone permission, connection/error/end states, capture, playback and reliable stop/mute cleanup. These browser capabilities do not require a desktop package.
-3. Bridge recognized speech into the existing Pi owner conversation and speak the completed response. Reuse its tools, scoped access, sourced memory and durable text history; do not build a parallel agent. External actions keep their existing review controls.
-4. Verify permission denial, interrupted capture, end-call cleanup and one public/synthetic tool task before calling it working. Continuous interruption/realtime transport can follow only after the chosen provider path is verified.
-
-No microphone permission has been requested, audio credential stored, paid service added or calling UI claimed functional. The concrete first blocker is the owner's selected audio authentication/provider path; the existing dependencies implement no capture/audio transport.
+The local path is implemented using the existing read-only Media Studio Whisper binary/model, FFmpeg and macOS speech. It reuses current ChatGPT/BYOK text transport, Pi tools, scoped access, memory and durable history. No assumption of audio support in the current OAuth grant is needed. No paid-provider choice is required for this local implementation. Real browser microphone consent and acoustic/playback verification remain owner actions; automated verification uses synthetic audio and fake media devices only.

@@ -1,3 +1,4 @@
+import {LocalVoice} from './voice';
 import {validateChatImages,chatRequestIdentity} from './chat-images';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -31,7 +32,7 @@ import {compatibleModels,validateGeneration,defaultGeneration,type GenerationSet
 const text=(message:Message)=>typeof message.content==='string'?message.content:message.content.filter(b=>b.type==='text').map(b=>b.text).join('');
 export class SetupError extends Error {}
 export class Engine {
- notifications!:DiscordNotifications;integrations!:IntegrationService;browser!:BrowserController;
+ readonly voice=new LocalVoice();notifications!:DiscordNotifications;integrations!:IntegrationService;browser!:BrowserController;
  readonly credentials:SessionCredentials;readonly models:MutableModels;
  private harness!:Harness;private root!:Awaited<ReturnType<Harness['root']>>;private watch!:ConversationWatch;private app!:Database;
  local!:LocalAccess;private localTools!:ReturnType<typeof localFilesExtension>;private privateLocalTools!:ReturnType<typeof localFilesExtension>;
@@ -162,5 +163,5 @@ export class Engine {
  completeOAuth(value:string){if(this.oauth.state!=='waiting'||!this.manualResolve)throw new SetupError('Start a new sign-in first.');this.manualResolve(value);this.manualResolve=undefined;}
  private stopInactiveConversation(id:string){void this.harness.conversation(Number(id) as ConversationId,ctx).then(conversation=>conversation?.abort(ctx)).catch(()=>{});}
  privateWorkItems(){return this.privateWork.listOwner();}
- async close(){await this.notifications?.close();this.local?.close();this.activePrivateConversations.clear();await this.privateWork?.close();await this.browser.close();await this.integrations.close();this.closed=true;await this.drainPromise;this.oauthAbort?.abort();await this.watch.stop();await this.harness.close(ctx);await this.memory?.close();this.app.close();}
+ async close(){await this.voice.close();await this.notifications?.close();this.local?.close();this.activePrivateConversations.clear();await this.privateWork?.close();await this.browser.close();await this.integrations.close();this.closed=true;await this.drainPromise;this.oauthAbort?.abort();await this.watch.stop();await this.harness.close(ctx);await this.memory?.close();this.app.close();}
 }

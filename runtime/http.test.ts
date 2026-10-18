@@ -14,3 +14,9 @@ test('ChatGPT orchestration uses a fresh stable device UUID, manual callback and
  try{await engine.credentials.modify('openai',async()=>({type:'api_key',key:'SYNTHETIC_LEGACY_KEY'}));engine.startOAuth();expect(engine.oauth.state).toBe('waiting');await Bun.sleep(5);expect(engine.oauth.url).toContain('auth.openai.com');engine.completeOAuth('isolated callback, never exchanged');await Bun.sleep(5);expect(engine.oauth.state).toBe('connected');expect((await engine.status()).provider.method).toBe('oauth');expect((await engine.credentials.read('openai_api'))?.type).toBe('api_key');await engine.disconnect();engine.startOAuth();await engine.disconnect();await Bun.sleep(5);expect(engine.oauth.state).toBe('idle');expect((await engine.status()).provider.state).toBe('setup_required');expect(ids).toHaveLength(2);expect(ids[0]).toBe(ids[1]);expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f-]{27}$/);}
  finally{await engine.close();await rm(dir,{recursive:true,force:true});}
 });
+
+
+test('voice endpoints keep the owner boundary and bounded uploads',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'pebble-voice-http-'));const engine=await Engine.open(directory);let calls=0;engine.voice.transcribe=async()=>{calls++;return {text:'Synthetic voice turn'};};const handler=runtimeHandler(engine,'synthetic-voice-owner');
+ try{expect((await handler(new Request('http://127.0.0.1:7342/voice/transcribe',{method:'POST',body:'{}'}))).status).toBe(401);expect(calls).toBe(0);const request=(body:string)=>new Request('http://127.0.0.1:7342/voice/transcribe',{method:'POST',headers:{'x-pebble-owner':'synthetic-voice-owner'},body});expect(await(await handler(request('{}'))).json()).toEqual({text:'Synthetic voice turn'});expect((await handler(request('x'.repeat(3000001)))).status).toBe(413);expect(calls).toBe(1);}finally{await engine.close();await rm(directory,{recursive:true,force:true});}
+});

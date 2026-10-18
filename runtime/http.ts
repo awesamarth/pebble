@@ -1,3 +1,4 @@
+import {VoiceError,voiceBodyLimit} from './voice';
 import {DiscordOnboardingError} from './integrations/discord-onboarding';
 import {NotificationRequestError} from './discord-notifications';
 import {LocalAccessError} from './local-access';
@@ -14,7 +15,7 @@ return async (request:Request):Promise<Response>=>{
  const path=new URL(request.url).pathname;
  try{
   if(request.method==='GET'){
-   if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
+   if(path==='/voice/status')return json(await engine.voice.status());if(path==='/browser/status')return json(engine.browser.status());if(path==='/browser/screenshot-view')return json(engine.browser.screenshotPreview());
    if(path==='/source'){const source=await engine.source(new URL(request.url).searchParams.get('id')??'');return json({source},source?200:404);}
    if(path==='/notifications')return json(engine.notificationStatus());
    if(path==='/local-access')return json(engine.local.status());
@@ -32,9 +33,9 @@ return async (request:Request):Promise<Response>=>{
    }
   }
   if(request.method==='POST'){
-   const limit=path==='/chat'?chatBodyLimit:24000;if(Number(request.headers.get('content-length')??0)>limit)return json({error:'Request too large.'},413);
+   const limit=path==='/chat'?chatBodyLimit:path==='/voice/transcribe'?voiceBodyLimit:24000;if(Number(request.headers.get('content-length')??0)>limit)return json({error:'Request too large.'},413);
    const raw=await request.text();if(raw.length>limit)return json({error:'Request too large.'},413);const body=raw?JSON.parse(raw):{};
-   if(path==='/notifications/settings'){if(typeof body.enabled!=='boolean')throw new NotificationRequestError('Choose whether requested Discord updates are enabled.');engine.notifications.setEnabled(body.enabled);return json(engine.notificationStatus());}
+   if(path==='/voice/transcribe')return json(await engine.voice.transcribe(body,request.signal));if(path==='/voice/speech')return json(await engine.voice.speech(body,request.signal));if(path==='/notifications/settings'){if(typeof body.enabled!=='boolean')throw new NotificationRequestError('Choose whether requested Discord updates are enabled.');engine.notifications.setEnabled(body.enabled);return json(engine.notificationStatus());}
    if(path==='/notifications/schedule')return json(engine.scheduleNotification(body));
    if(path==='/notifications/cancel')return json(engine.notifications.cancel(body.id));
    if(path==='/local-access/grant')return json(await engine.local.grant(body));
@@ -87,6 +88,6 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/chat')return json(await engine.send(body.content,body.requestId,body.images));if(path==='/resume'){await engine.resume();return json({ok:true});}if(path==='/abort'){await engine.abort();return json({ok:true});}
   }
   return json({error:'Unknown runtime operation.'},404);
- }catch(error){if(error instanceof DiscordOnboardingError||error instanceof NotificationRequestError)return json({error:error.message},409);if(error instanceof LocalAccessError)return json({error:error.message},409);if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}
+ }catch(error){if(error instanceof DiscordOnboardingError||error instanceof NotificationRequestError)return json({error:error.message},409);if(error instanceof VoiceError)return json({error:error.message},409);if(error instanceof LocalAccessError)return json({error:error.message},409);if(error instanceof GmailError)return json({error:`Gmail: ${error.code.replaceAll('_',' ')}.`},path==='/integrations/gmail/push'?401:409);if(error instanceof IntegrationError)return json({error:error.message},409);return json({error:error instanceof SetupError?error.message:'The operation could not complete. Check setup and try again.'},error instanceof SetupError?409:500);}
 };
 }
