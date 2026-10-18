@@ -16,3 +16,8 @@ test('recognized source citations render inspectable buttons while code and link
  const html=renderToStaticMarkup(<MessageMarkdown text={`A grounded claim [${id}] and another [Source: 1:7:0].\n\n\`${id}\`\n\n[Ordinary](https://example.com)\n\n\`[Source: 1:8:0]\`\n\nSource: gmail:${'b'.repeat(64)}`}/>);
  expect((html.match(/aria-label="Open saved source"/g)??[])).toHaveLength(3);expect(html).toContain('href="https://example.com"');expect(html).toContain('[Source: 1:8:0]');expect(html).toContain(`<code`);expect(html).not.toContain(`[${id}]`);
 });
+
+test('source references tolerate sentence punctuation and lowercase labels',()=>{
+ const html=renderToStaticMarkup(<MessageMarkdown text="Evidence Source: 1:7:0. Another [source: 1:8:0]. Literal `Source: 1:9:0.`"/>);
+ expect((html.match(/aria-label="Open saved source"/g)??[])).toHaveLength(2);expect(html).toContain('Literal');expect(html).toContain('Source: 1:9:0.');
+});

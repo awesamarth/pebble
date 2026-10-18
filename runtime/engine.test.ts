@@ -25,3 +25,22 @@ test('same real Harness executes registered browser tools and excludes browser c
  try{engine.saveProfile(defaultLook);await engine.setKey('isolated-test-key','gpt-6-sol');await engine.connectMemory(config);await engine.browser.start();await engine.browser.resume();await engine.send('Inspect only the blank dedicated browser tabs.','browser-harness-fixture-1');for(let i=0;i<150&&!engine.snapshot().messages.some(m=>m.text==='ISOLATED BROWSER HARNESS COMPLETE');i++)await Bun.sleep(20);expect(toolSeen).toBe(true);expect(resultSeen).toBe(true);expect(calls).toBe(2);expect(engine.snapshot().messages.some(m=>m.text==='ISOLATED BROWSER HARNESS COMPLETE')).toBe(true);await Bun.sleep(30);expect(writes).toHaveLength(0);await engine.browser.stop();await engine.connectMemory(config);await Bun.sleep(30);expect(writes).toHaveLength(0);
  }finally{await engine.close();await rm(dir,{recursive:true,force:true});}
 },15000);
+
+test('automatic Pi compaction reports progress and retains restored history',async()=>{
+ const ctx=(await import('@earendil-works/chord/context')).BACKGROUND_CONTEXT;
+ const models=createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}});const base=openaiProvider();let summaries=0;
+ models.setProvider({...base,getModels:()=>base.getModels().map(m=>m.id==='gpt-6-sol'?{...m,contextWindow:40000}:m),auth:{apiKey:{name:'synthetic',resolve:async()=>({auth:{apiKey:'synthetic'}})}},streamSimple:model=>{throw Error('provider stub not installed');}});
+ const provider=models.getProvider('openai')!;
+ models.setProvider({...provider,streamSimple:(model,context)=>{
+  const summary=JSON.stringify(context.messages).includes('context summarization assistant');if(summary)summaries++;
+  const message:AssistantMessage={role:'assistant',content:[{type:'text',text:summary?'Synthetic checkpoint: retain the owner’s test task.':'Synthetic response'}],provider:'openai',api:'openai-responses',model:model.id,usage:{input:50,output:10,cacheRead:0,cacheWrite:0,totalTokens:60,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'stop',timestamp:Date.now()};
+  const stream=createAssistantMessageEventStream();setTimeout(()=>stream.push({type:'done',reason:'stop',message}),summary?40:0);return stream;
+ }});
+ const dir=await mkdtemp(join(tmpdir(),'pebble-compaction-'));let engine=await Engine.open(dir,models);const states:NonNullable<ReturnType<Engine['snapshot']>['context']>[]=[];const unsubscribe=engine.subscribe(v=>{if(v.context)states.push(v.context);});
+ try{
+  const root=(engine as unknown as {root:Awaited<ReturnType<import('@earendil-works/pi-durable').Harness['root']>>}).root;
+  // Large synthetic entries exercise the real default policy, not live account data.
+  for(let index=0;index<2;index++){const submission=await root.submit({type:'input',content:`Synthetic turn ${index}: `+'ordinary synthetic words '.repeat(4500),requestId:`synthetic-compaction-${index}`,whenBusy:'reject'},ctx);expect((await submission.wait(ctx)).status).toBe('done');}
+  await Bun.sleep(50);expect(summaries).toBeGreaterThan(0);expect(states.some(s=>s.state==='summarizing'&&s.blocking)).toBe(true);expect(JSON.stringify(states)).not.toContain('error');expect(engine.snapshot().messages.filter(m=>m.role==='user')).toHaveLength(2);unsubscribe();await engine.close();engine=await Engine.open(dir,models);expect(engine.snapshot().messages.filter(m=>m.role==='user')).toHaveLength(2);
+ }finally{unsubscribe();await engine.close();await rm(dir,{recursive:true,force:true});}
+},15000);
