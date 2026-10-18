@@ -56,7 +56,7 @@ return async (request:Request):Promise<Response>=>{
    if(path==='/browser/reject')return json(engine.browser.reject(body.id));
    if(path==='/browser/screenshot'){await engine.browser.screenshot();return json(engine.browser.screenshotPreview());}
    const integrations=engine.integrations;
-   if(path==='/integrations/gmail/configure')return json(integrations.configureGmail(body));
+   if(path==='/integrations/gmail/configure')return json(await integrations.configureGmail(body));
    if(path==='/integrations/gmail/search')return json(await integrations.gmail.searchMessages(body.query,body.maxResults??5));
    if(path==='/integrations/gmail/read')return json(await integrations.gmail.readMessage(body.id));
    if(path==='/integrations/gmail/start')return json(await integrations.gmail.beginOAuth());

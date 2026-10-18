@@ -4,15 +4,16 @@ const READ = 'https://www.googleapis.com/auth/gmail.readonly';
 const PUBSUB = 'https://www.googleapis.com/auth/pubsub';
 const SEND = 'https://www.googleapis.com/auth/gmail.send';
 const BASE = 'https://gmail.googleapis.com/gmail/v1/users/me';
-export type GmailConfig = { clientId: string; clientSecret: string; deliveryMode?: 'manual' | 'pull' | 'push'; redirectUri?: string; allowSend?: boolean; allowFullContent?: boolean; ingestEnabled?: boolean; topicName?: string; pushAudience?: string; pushServiceAccount?: string; subscription?: string };
+export type GmailConfig = { clientId: string; clientSecret: string; rememberConnection?:boolean; deliveryMode?: 'manual' | 'pull' | 'push'; redirectUri?: string; allowSend?: boolean; allowFullContent?: boolean; ingestEnabled?: boolean; topicName?: string; pushAudience?: string; pushServiceAccount?: string; subscription?: string };
 export type GmailEvent = { id: string; kind: 'message'; source: 'gmail'; message: Record<string, unknown>; contentMode: 'metadata' | 'full' };
-export type GmailHooks = { schedule?: (callback: () => void, delay: number) => (() => void); fetch?: typeof fetch; verifyPush?: (token: string, audience: string) => Promise<JWTPayload>; onEvent: (event: GmailEvent) => Promise<void>; onCursor?: (historyId: string, email?: string) => Promise<void>; loadCursor?: (email: string) => Promise<string | undefined>; deliverySeen?: (key: string) => Promise<boolean>; onDelivery?: (key: string) => Promise<void> };
+export type GmailSavedSession={version:1;config:GmailConfig;token?:{access:string;refresh?:string;expires:number;scopes:string[]};email?:string};
+export type GmailHooks = { onCredentials?:(session:GmailSavedSession)=>Promise<void>; schedule?: (callback: () => void, delay: number) => (() => void); fetch?: typeof fetch; verifyPush?: (token: string, audience: string) => Promise<JWTPayload>; onEvent: (event: GmailEvent) => Promise<void>; onCursor?: (historyId: string, email?: string) => Promise<void>; loadCursor?: (email: string) => Promise<string | undefined>; deliverySeen?: (key: string) => Promise<boolean>; onDelivery?: (key: string) => Promise<void> };
 export class GmailError extends Error { constructor(public code: string) { super(code); } }
 const cursor = (id: unknown): string => { if (typeof id !== 'string' || !/^\d+$/.test(id)) throw new GmailError('invalid_history_id'); return id; };
 const maxCursor = (a: string, b: string) => BigInt(a) > BigInt(b) ? a : b;
 const jwks = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 
-/** One instance per local session. Tokens are never serialized by status(). */
+/** Tokens never appear in status; the optional host hook writes only to secure storage. */
 export class GmailIntegration {
   private config?: GmailConfig;
   private token?: { access: string; refresh?: string; expires: number; scopes: string[] };
@@ -42,6 +43,13 @@ export class GmailIntegration {
     this.disconnect();this.abort = new AbortController();
     this.config = { ...config, redirectUri };
   }
+  async saveCredentials(){if(this.config)await this.hooks.onCredentials?.({version:1,config:structuredClone(this.config),...(this.token?{token:structuredClone(this.token)}:{}),...(this.email?{email:this.email}:{})});}
+  async restoreCredentials(value:GmailSavedSession){
+    if(!value||value.version!==1||value.config?.rememberConnection!==true)throw new GmailError('invalid_saved_connection');
+    this.configure(value.config);
+    if(value.token){const t=value.token;if(typeof t.access!=='string'||!t.access||typeof t.refresh!=='string'||!t.refresh||!Number.isFinite(t.expires)||!Array.isArray(t.scopes)||!t.scopes.every(s=>typeof s==='string')||!t.scopes.includes(READ)||typeof value.email!=='string'||!value.email.includes('@')){this.disconnect();throw new GmailError('invalid_saved_connection');}this.token=structuredClone(t);this.email=value.email;this.historyId=await this.hooks.loadCursor?.(value.email);}
+    return this.status();
+  }
   status() { return { deliveryMode:this.config?.deliveryMode??'manual',pullState:this.pullState,pullError:this.pullError, configured: !!this.config, connected: !!this.token, email: this.email, allowSend: !!this.config?.allowSend && !!this.token?.scopes.includes(SEND), ingestEnabled: !!this.config?.ingestEnabled, contentMode: this.config?.allowFullContent ? 'full' : 'metadata', historyId: this.historyId, watchExpires: this.watchExpires, renewalAttempts: this.renewalAttempts, needsResyncConsent: this.recovery, error: this.error }; }
   async beginOAuth() {
     const c = this.requiredConfig();const generation=this.generation;
@@ -64,7 +72,7 @@ export class GmailIntegration {
     if (!scopes.includes(READ)) throw new GmailError('readonly_scope_required');
     this.token = { access: String(data.access_token), refresh: typeof data.refresh_token === 'string' ? data.refresh_token : undefined, expires: Date.now() + Number(data.expires_in ?? 3600) * 1000, scopes };
     try { const profile = await this.api('/profile'); if (generation !== this.generation) throw new GmailError('session_disconnected'); if(typeof profile.emailAddress!=='string'||!profile.emailAddress.includes('@'))throw new GmailError('invalid_mail_profile');this.email = profile.emailAddress; const restored = await this.hooks.loadCursor?.(this.email);if(generation!==this.generation)throw new GmailError('session_disconnected'); this.historyId = cursor(restored ?? profile.historyId); await this.hooks.onCursor?.(this.historyId, this.email); } catch (e) { if(generation===this.generation)this.token = undefined; throw e; }
-    return this.status();
+    await this.saveCredentials();return this.status();
   }
   /** On-demand reads never call onEvent or change the saved history cursor. */
   async searchMessages(query: string, max = 5) {
@@ -256,7 +264,7 @@ export class GmailIntegration {
       if (!this.refreshing) {
         if (!token.refresh) throw new GmailError('gmail_reconnect_required');
         const c = this.requiredConfig(); const previous = token;
-        const refresh = (async () => { const data = await this.tokenRequest({ client_id: c.clientId, client_secret: c.clientSecret, refresh_token: previous.refresh!, grant_type: 'refresh_token' }); if (generation !== this.generation) throw new GmailError('session_disconnected'); return this.token = { ...previous, access: String(data.access_token), refresh: typeof data.refresh_token === 'string' ? data.refresh_token : previous.refresh, expires: Date.now() + Number(data.expires_in ?? 3600) * 1000 }; })();
+        const refresh = (async () => { const data = await this.tokenRequest({ client_id: c.clientId, client_secret: c.clientSecret, refresh_token: previous.refresh!, grant_type: 'refresh_token' }); if (generation !== this.generation) throw new GmailError('session_disconnected'); this.token = { ...previous, access: String(data.access_token), refresh: typeof data.refresh_token === 'string' ? data.refresh_token : previous.refresh, expires: Date.now() + Number(data.expires_in ?? 3600) * 1000 };await this.saveCredentials();if(generation!==this.generation)throw new GmailError('session_disconnected');return this.token!; })();
         this.refreshing = refresh;
         void refresh.finally(() => { if (this.refreshing === refresh) this.refreshing = undefined; }).catch(() => {});
       }

@@ -21,7 +21,7 @@ Open http://127.0.0.1:7341/home. The owner binds only `127.0.0.1:7342`; the prox
 3. Connect FalkorDB. For the provided local container: host `127.0.0.1`, port `7380`, graph `pebble`, blank username/password, TLS off. Explicitly initialize the graph on first setup. Cloud uses your own settings and TLS. Connecting syncs saved eligible conversation sources into that graph.
 4. Send a message. Optional app connections, folder grants and microphone consent remain yours to configure; a fresh clone contains no account credentials or private data.
 
-On macOS, supported provider credentials use the OS Keychain. Discord token persistence is opt-in. Passwordless graph configuration restores on restart; database passwords and Gmail settings/tokens remain session-only. Character, conversation/task storage and source-sync outbox live under ignored `.pebble/`. Never publish that directory. See [provider persistence](docs/provider-persistence.md), [Gmail setup](docs/gmail-setup.md) and [local database setup](docs/local-memory.md).
+On macOS, supported provider credentials use the OS Keychain. Discord token persistence is opt-in. Passwordless graph configuration restores on restart; database passwords remain session-only. Gmail setup and sign-in are session-only unless you opt into macOS Keychain storage. Character, conversation/task storage and source-sync outbox live under ignored `.pebble/`. Never publish that directory. See [provider persistence](docs/provider-persistence.md), [Gmail setup](docs/gmail-setup.md) and [local database setup](docs/local-memory.md).
 
 ## Implemented and verified
 
