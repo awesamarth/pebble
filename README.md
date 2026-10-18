@@ -42,6 +42,33 @@ Voice is turn-based, not phone/SMS or a continuous interruptible realtime call. 
 
 FalkorDB supplies remembered facts used in the model's next response; it is not just a connection badge or a transcript stored as opaque text. SQLite handles durable execution/transcripts separately. Native semantic mode currently uses the Mac’s English sentence model; unsupported hosts visibly retain wording and graph recall. The [graph explanation](docs/graph-memory.md) shows the Source/Fact/Person/Project model, native vector search, multi-step queries and synthetic paraphrase/relationship checks. A paraphrase can retrieve a bicycle repair fact without shared wording; a CobaltRelay lookup follows Liora → BirchLedger → Noor to an after-lunch preference. Real-model answers cited the source facts and described the indirect relationship accurately.
 
+### The memory graph
+
+```mermaid
+flowchart LR
+    Fact["Fact · saved statement; optional embedding"] -->|SUPPORTED_BY| Source["Source · original message and conversation ID"]
+    Fact -->|ABOUT| Person["Person · named in the fact and source"]
+    Fact -->|ABOUT| Project["Project · named in the fact and source"]
+    Workspace["PebbleWorkspace · initialization marker; no relationships"]
+```
+
+These arrows are the stored edge directions. A fact can link to a person, a project, both or neither; every saved fact keeps its supporting source. Roles such as “leads” or “reviews” remain in the fact's text, rather than becoming invented relationship types.
+
+For each owner chat request, pebble retrieves matching graph facts before generating the answer. The agent can also call `pebble_memory_search`. Retrieval combines wording and local sentence-vector matches, then follows shared Person/Project nodes to related facts, up to three expansion steps by default. Each result carries its original source and, for connected results, its traversal path. The graph therefore changes which context reaches the model; SQLite separately preserves conversation and execution history. A shared entity supplies context, not proof of a new relationship.
+
+This representative query shows one expansion from a matched fact (`$seed0` is its ID):
+
+```cypher
+MATCH (seed:Fact {id: $seed0})-[:ABOUT]->(entity)<-[:ABOUT]-(related:Fact)
+MATCH (related)-[:SUPPORTED_BY]->(source:Source)
+WHERE seed.id <> related.id
+RETURN DISTINCT related.text AS fact, entity.name AS connectedThrough,
+                source.id AS sourceId, source.text AS sourceText
+LIMIT 16
+```
+
+**Demo:** save separately sourced facts saying Liora leads CobaltRelay, Liora coordinates BirchLedger, Noor reviews BirchLedger, and Noor is available after lunch. A CobaltRelay lookup can follow the shared entities Liora → BirchLedger → Noor and surface the review-time preference. Show **Memory → Search saved facts → Connection path** and the original source beside the answer. Explain that Noor's connection to CobaltRelay is indirect: the graph does not assert that Noor reviews CobaltRelay. The existing synthetic graph and agent tests exercise this scenario; a same-conversation answer alone is not proof of graph retrieval.
+
 ```sh
 bun run typecheck
 bun run test:runtime
