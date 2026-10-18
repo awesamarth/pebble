@@ -40,7 +40,7 @@ Voice is turn-based, not phone/SMS or a continuous interruptible realtime call. 
 
 ## Graph and verification
 
-FalkorDB supplies remembered facts used in the model's next response; it is not just a connection badge or a transcript stored as opaque text. SQLite handles durable execution/transcripts separately. Native semantic mode currently uses the Mac’s English sentence model; unsupported hosts visibly retain wording and graph recall. The [graph explanation](docs/graph-memory.md) shows the Source/Fact/Person/Project model, native vector search, multi-step queries and synthetic paraphrase/relationship checks. A paraphrase can retrieve a bicycle repair fact without shared wording; a CobaltRelay lookup follows Liora → BirchLedger → Noor to an after-lunch preference. Real-model answers cited the source facts and described the indirect relationship accurately.
+FalkorDB supplies remembered facts used in the model's next response; it is not just a connection badge or a transcript stored as opaque text. SQLite handles durable execution/transcripts separately. Native semantic mode currently uses the Mac’s English sentence model; unsupported hosts visibly retain wording and graph recall. The [graph explanation](docs/graph-memory.md) shows the Source/Fact/Person/Project model, native vector search, multi-step queries and synthetic paraphrase/relationship checks. A paraphrase can retrieve a bicycle repair fact without shared wording; a lookup in fictional CobaltRelay test data follows Liora → BirchLedger → Noor to an after-lunch preference. Real-model answers cited the source facts and described the indirect relationship accurately.
 
 ### The memory graph
 
@@ -67,7 +67,7 @@ RETURN DISTINCT related.text AS fact, entity.name AS connectedThrough,
 LIMIT 16
 ```
 
-**Demo:** save separately sourced facts saying Liora leads CobaltRelay, Liora coordinates BirchLedger, Noor reviews BirchLedger, and Noor is available after lunch. A CobaltRelay lookup can follow the shared entities Liora → BirchLedger → Noor and surface the review-time preference. Show **Memory → Search saved facts → Connection path** and the original source beside the answer. Explain that Noor's connection to CobaltRelay is indirect: the graph does not assert that Noor reviews CobaltRelay. The existing synthetic graph and agent tests exercise this scenario; a same-conversation answer alone is not proof of graph retrieval.
+**Fictional demo/test data:** Liora, Noor, CobaltRelay and BirchLedger are invented names used in the tests, not real people or projects. Save separately sourced facts saying Liora leads CobaltRelay, Liora coordinates BirchLedger, Noor reviews BirchLedger, and Noor is available after lunch. A CobaltRelay lookup can follow the shared entities Liora → BirchLedger → Noor and surface the review-time preference. Show **Memory → Search saved facts → Connection path** and the original source beside the answer. Explain that Noor's connection to CobaltRelay is indirect: the graph does not assert that Noor reviews CobaltRelay. The existing synthetic graph and agent tests exercise this scenario; a same-conversation answer alone is not proof of graph retrieval.
 
 ```sh
 bun run typecheck
