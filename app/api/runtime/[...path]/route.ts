@@ -1,3 +1,4 @@
+import {readMemoryDisplay,writeMemoryDisplay} from '../../../../runtime/memory-display';
 import {voiceBodyLimit} from '../../../../runtime/voice';
 import {chatBodyLimit} from '../../../../runtime/chat-images';
 import { readFile } from 'node:fs/promises';
@@ -11,6 +12,8 @@ async function proxy(request:Request,context:{params:Promise<{path:string[]}>}){
  const {path}=await context.params;const operation=path.join('/');if(!allowed.has(operation))return new Response(null,{status:404});
  try{const token=await readFile(resolve('.pebble/owner.token'),'utf8');const body=request.method==='POST'?await request.text():undefined;if(body&&body.length>(operation==='chat'?chatBodyLimit:operation==='voice/transcribe'?voiceBodyLimit:24000))return new Response(null,{status:413});
  const upstream=await fetch(`http://127.0.0.1:7342/${operation}${new URL(request.url).search}`,{method:request.method,headers:{'x-pebble-owner':token,'content-type':'application/json'},body,signal:request.signal,cache:'no-store'});
+ if(upstream.ok&&operation==='status'){const value=await upstream.json();if(value.memory?.state==='connected'&&!value.memory.connection){const connection=await readMemoryDisplay(resolve('.pebble'));if(connection)value.memory.connection=connection;}return Response.json(value,{headers:{'Cache-Control':'no-store'}});}
+ if(upstream.ok&&operation==='memory/connect'&&body){const result=await upstream.clone().json();if(result.state==='connected')await writeMemoryDisplay(resolve('.pebble'),JSON.parse(body),Number(await readFile(resolve('.pebble/owner.lock'),'utf8')));}
  return new Response(upstream.body,{status:upstream.status,headers:{'Content-Type':upstream.headers.get('content-type')??'application/json','Cache-Control':'no-store','X-Accel-Buffering':'no'}});
  }catch{return Response.json({error:'The Pebble runtime is offline. Start it with bun run runtime.'},{status:503});}
 }

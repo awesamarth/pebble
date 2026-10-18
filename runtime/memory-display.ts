@@ -1,0 +1,8 @@
+import {readFile,writeFile,rename,unlink} from 'node:fs/promises';
+import {join} from 'node:path';
+import type {GraphMemoryConfig} from './memory';
+export type MemoryConnectionSummary={host:string;port:number;graph:string;tls:boolean;username?:string;saved:boolean;passwordRequired:boolean};
+export function memoryConnectionSummary(config:GraphMemoryConfig):MemoryConnectionSummary{return {host:config.host,port:config.port,graph:config.graph,tls:config.tls,...(config.username?{username:config.username}:{}),saved:!config.password,passwordRequired:!!config.password};}
+/** Safe display metadata only; keeps the UI accurate across an independently running older owner. */
+export async function writeMemoryDisplay(directory:string,config:GraphMemoryConfig,ownerPid=process.pid){const path=join(directory,'memory-display.json'),temporary=path+'.tmp';try{await writeFile(temporary,JSON.stringify({ownerPid,connection:memoryConnectionSummary(config)}),{mode:0o600});await rename(temporary,path);}catch{await unlink(temporary).catch(()=>{});await unlink(path).catch(()=>{});}}
+export async function readMemoryDisplay(directory:string):Promise<MemoryConnectionSummary|undefined>{try{const [raw,pid]=await Promise.all([readFile(join(directory,'memory-display.json'),'utf8'),readFile(join(directory,'owner.lock'),'utf8')]);const value=JSON.parse(raw),c=value.connection;if(value.ownerPid!==Number(pid)||!c||typeof c.host!=='string'||typeof c.graph!=='string'||!Number.isInteger(c.port)||typeof c.tls!=='boolean')return;return {host:c.host,port:c.port,graph:c.graph,tls:c.tls,...(typeof c.username==='string'?{username:c.username}:{}),saved:c.saved===true,passwordRequired:c.passwordRequired===true};}catch{return;}}
