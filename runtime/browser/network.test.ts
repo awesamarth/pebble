@@ -44,11 +44,8 @@ describe("browser public network boundary", () => {
   });
 });
 
-test('public research excludes sensitive paths and query commands while allowing normal public searches',async()=>{
- const {assertPublicResearchUrl}=await import('./network');
- for(const url of ['https://publicsite.com/docs/intro','https://publicsite.com/search?q=pebble&page=2','https://publicsite.com/articles/reading','https://www.google.com/search?q=Noida&sei=abc&sg_ss=xyz'])expect(assertPublicResearchUrl(url).protocol).toBe('https:');
- for(const url of ['https://accounts.publicsite.com/','https://publicsite.com/logout','https://publicsite.com/sign-in','https://publicsite.com/%2564elete','https://publicsite.com/account','https://publicsite.com/checkout','https://publicsite.com/%64elete','https://publicsite.com/search?token=abc','https://publicsite.com/?action=delete','https://publicsite.com/?unknown=anything','https://publicsite.com/search?sei=abc','https://user:password@publicsite.com/'])expect(()=>assertPublicResearchUrl(url)).toThrow();
- expect(assertPublicResearchUrl('https://publicsite.com/style.css?v=1',true).pathname).toBe('/style.css');expect(()=>assertPublicResearchUrl('https://publicsite.com/file?action=delete',true)).toThrow();
+test('normal navigation preserves arbitrary search parameters and account paths without value-word heuristics',async()=>{
+ const {assertNoBrowserCredentials}=await import('./network');
+ for(const url of ['https://www.youtube.com/results?search_query=new+clayface+trailer','https://google.com/search?q=password+manager&sei=abc','https://publicsite.com/account?session=ordinary&code=123&unknown=anything','https://publicsite.com/search?query=token+research&sort_order=recent'])expect(assertNoBrowserCredentials(url).href).toBe(new URL(url).href);
+ for(const url of ['https://publicsite.com/?access_token=synthetic','https://publicsite.com/?api_key=synthetic','https://user:password@publicsite.com/','javascript:alert(1)'])expect(()=>assertNoBrowserCredentials(url)).toThrow();
 });
-
-test('public link normalization strips only known tracking and preserves action/credential rejection',async()=>{const{publicResearchDestination}=await import('./network');expect(publicResearchDestination('https://publicsite.com/article?utm_source=google&srsltid=tracking').href).toBe('https://publicsite.com/article');expect(publicResearchDestination('https://www.google.com/url?q=https%3A%2F%2Fpublicsite.com%2Farticle&sa=U').href).toBe('https://publicsite.com/article');expect(()=>publicResearchDestination('https://publicsite.com/article?token=secret&utm_source=google')).toThrow();expect(()=>publicResearchDestination('https://publicsite.com/delete?utm_source=google')).toThrow();});
