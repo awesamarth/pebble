@@ -1,81 +1,58 @@
-# Pebble
+# pebble
 
-A local Next.js + strict TypeScript app using Bun. The original landing page and character playground remain at `/`; the functional workspace starts at `/home`.
+A local personal assistant with a character you name, durable conversations, source-backed graph memory, tools and turn-based voice. Built with Next.js, TypeScript, Bun, **Pi Durable Harness 1.2.0** and **FalkorDB**. The original character playground is at `/`; the functional workspace is at `/home`.
 
 ## Run locally
 
 ```sh
 bun install
+# Optional local FalkorDB; alternatively configure your own Cloud/server graph.
+docker compose -f compose.falkordb.yml up -d
 # Terminal one: one process owns durable storage
 bun run runtime
-# Terminal two: user-facing app
+# Terminal two
 bun run dev --port 7341
 ```
 
-Open http://127.0.0.1:7341/home. The owner listens only on `127.0.0.1:7342`. Check ports before launching; never kill unrelated listeners. The local proxy currently allows only `localhost:7341` / `127.0.0.1:7341`. Port 3000 is not used.
+Open http://127.0.0.1:7341/home. The owner binds only `127.0.0.1:7342`; the proxy accepts `localhost:7341` / `127.0.0.1:7341`. Check ports first; do not kill unrelated listeners. Port 3000 is not used.
 
-## Functional first milestone
+1. Save your character.
+2. Sign in with ChatGPT, or configure your own OpenAI, Anthropic, Google/Gemini or supported OpenRouter API key/model. API inference may incur the selected provider's charges. ChatGPT uses a fresh app-specific device UUID, not imported Codex credentials; its callback uses port 1455.
+3. Connect FalkorDB. For the provided local container: host `127.0.0.1`, port `7380`, graph `pebble`, blank username/password, TLS off. Explicitly initialize the graph on first setup. Cloud uses your own settings and TLS. Connecting syncs saved eligible conversation sources into that graph.
+4. Send a message. Optional app connections, folder grants and microphone consent remain yours to configure; a fresh clone contains no account credentials or private data.
 
-- Character onboarding with the same original parameterized SVG, eight colors, eye styles, glasses and expressions. Saved on the Mac in SQLite; browser playground settings are imported only as an initial suggestion.
-- Explicit OpenAI BYOK setup and the actual Pi AI official **Sign in with ChatGPT** flow. A new app-specific UUID is persisted for ChatGPT's device ID. Callback port is `localhost:1455`, with manual redirect handling if necessary. Existing Codex credentials, global credential files and environment API keys are never imported.
-- Real `@earendil-works/pi-durable@1.2.0` **Harness** in a separate long-running owner process. `pi-ai@1.2.0` provides models; this is not a substitution with pi-agent or plain Pi.
-- SQLite transcript and task persistence; committed in-flight partials delivered via SSE, reconnect snapshots, abort, safe same-request retries, and an explicit resume control for interrupted work after setup is reconnected.
-- Real FalkorDB adapter: Cloud TLS default, optional explicit self-host settings, bounded health/query checks, parameterized MERGEs, facts linked to conversation sources, Person/Project relationships, inspection and context supplied to chat. Up to 20 source-backed facts are included as untrusted context per turn.
-- A persistent source-sync outbox retries idempotent graph writes on reconnection. The transcript stays safe in SQLite if graph sync fails. No pretend graph fallback.
-- Local owner token, same-origin proxy checks, bounded browser tools and explicit per-action review; optional integration send permissions require setup.
+On macOS, supported provider credentials use the OS Keychain. Discord token persistence is opt-in. Passwordless graph configuration restores on restart; database passwords and Gmail settings/tokens remain session-only. Character, conversation/task storage and source-sync outbox live under ignored `.pebble/`. Never publish that directory. See [provider persistence](docs/provider-persistence.md), [Gmail setup](docs/gmail-setup.md) and [local database setup](docs/local-memory.md).
 
-## Live setup still required
+## Implemented and verified
 
-1. Save your character in the workspace.
-2. Either authorize a **fresh ChatGPT login** (port1455 must be free), or enter **your own OpenAI API key** and select a model. Saving a key makes no model call. The first successful chat response marks the provider verified. API messages may incur provider charges.
-3. Enter your **FalkorDB host, port, graph name, username/password, and TLS setting**. Use TLS for Cloud. Use an existing graph with read/write access, or explicitly select **Initialize this graph for Pebble** to create a workspace node. Health checks are read-only unless you opt into initialization.
-4. Open Conversation and send a message yourself.
+| Capability | Working behavior and evidence boundary |
+| --- | --- |
+| Assistant execution | Real Pi Durable Harness; streamed committed replies, SQLite history, abort/resume, task persistence, native tools and automatic compaction. Compaction status is visible; a real Harness test verifies original history after compaction/reopen. |
+| FalkorDB memory | Source-backed facts, Person/Project links, question-based retrieval and one-hop related context. Inspect sources, edit/delete facts, reject stale edits and reconnect across sessions. Real database and real-model synthetic-data checks passed. **[Graph model, actual queries and decision evidence](docs/graph-memory.md).** |
+| Local files and private work | Explicit folder grants; Pi-native read/create/edit, file/text search and bounded private background tasks. Real-model synthetic file read/edit/create checks passed. Optional commands require exact review and run in disposable copies. No folders are granted by default. |
+| Public browser research | Actual sandboxed hidden Chromium with a fresh anonymous profile, public navigation/link following, observations and optional screenshots. Real-model public-page tasks passed. Account browsing uses a separate profile and explicit takeover/reviews. [Limits](docs/browser.md). |
+| In-app voice | Local Whisper transcription → existing Pi conversation/tools/memory → macOS speech file. Record/Stop/End controls; playback only on user action. Synthetic audio through the real model and restored text history passed. Owner microphone/acoustic/playback verification remains pending. Requires existing local speech tools; no automatic download or cloud audio fee. [Setup and limits](docs/local-voice.md). |
+| Discord | Owner-scoped mentions, channel memory/history, ordinary replies, private-work handoff and opt-in requested reminders/completion notices. A saved bot connection is operational on the development Mac; fresh clones require their own bot setup. Delivery/notification regressions use isolated transports. No private channel IDs or tokens are included. |
+| Gmail | OAuth, bounded mailbox search/read, summary/reply context handoff, reviewable outbound messages and incremental intake via manual checks, local Pub/Sub pull or authenticated hosted push. Implemented and fixture-tested; **no live mailbox verification**. User Google setup/consent is still required. |
+| Character and chat UI | Original parameterized SVG customizer, accessible controls, local persistence, safe Markdown, code highlighting/copy, tables, source inspection and bounded image inputs. Desktop/mobile checks passed. |
 
-Provider keys, OAuth tokens and graph secrets currently live **only in owner-process memory**. They are never sent back to the browser after entry, logged, stored in localStorage or written to SQLite. Reconnect after owner restart. Secure persistent secret-vault integration is a later milestone. Character settings, installation UUID, chat, tasks and graph outbox remain under ignored `.pebble/` (directory mode0700; owner token0600). Do not sync or publish that directory.
+Voice is turn-based, not phone/SMS or a continuous interruptible realtime call. There is no multi-user hosting, recurring autonomous monitor or full desktop control. Reviews remain for consequential sends/actions; ordinary authorized reads/searches/public research do not require repeated approval. See [current status](docs/product-status.md) and [execution boundaries](docs/assistant-capabilities.md). Landing illustrations remain a design preview; the workspace is the functional application.
 
-The UI stays setup-required until the real provider configuration and FalkorDB connection exist. Tests use isolated deterministic model/graph doubles, never a user-facing mock responder. No paid API calls, live authorization or cloud-account provisioning were performed while building.
+## Graph and verification
 
-## Bun compatibility
-
-The published Pi package declares Node>=22.19.0. This Mac has Node22.17.0. Bun1.3.14 cannot import Pi's `node:sqlite` adapter. Instead `runtime/sqlite.ts` implements Pi's supported portable `SqliteDatabase` interface using `bun:sqlite`, serializing async transactions and invalidating expired handles. The actual Harness and the full upstream storage conformance suite pass on Bun. No global Node changes or runtime-manager substitution were made. The upstream package remains experimental and is pinned exactly.
-
-## Checks
+FalkorDB supplies remembered facts used in the model's next response; it is not just a connection badge or a transcript stored as opaque text. SQLite handles durable execution/transcripts separately. The [graph explanation](docs/graph-memory.md) shows the Source/Fact/Person/Project model, exact read queries and the synthetic Mira/Lantern relationship-recall check. A Lantern question retrieves Mira’s quiet-morning preference through the shared Person node, although that preference contains no Lantern text; the model uses it with its original source citation.
 
 ```sh
 bun run typecheck
-bun run build
 bun run test:runtime
-bun verification/check.mjs
-bun verification/hero.mjs
-bun verification/workspace.mjs
-bun verification/integrations.mjs
-bun verification/browser-panel.mjs
+bun run runtime/memory-real-smoke.ts
+bun run build
 ```
 
-Runtime tests exercise actual durable storage, streaming partial commits, reopen/history, idempotency, setup gating, HTTP/SSE auth, fresh-device OAuth orchestration and graph protocol/health behavior. Model and graph doubles are clearly labeled and isolated under temporary test directories. Browser scripts use the Chromium cached on this Mac; adjust `executablePath` elsewhere. Screenshots are in `verification/`.
+Use an isolated build directory if the preview is running: building over its `.next` can disrupt it. Runtime browser tests require installed sandbox-capable Chromium. The real voice test runs only when local speech tools are available; it generates files silently, never microphone capture or speaker playback. The memory smoke check requires the local database at port 7380 and creates/deletes a uniquely named synthetic graph. It never selects the personal graph.
 
-## Local browser milestone
+Checks include isolated model/provider transports and actual local Chromium/FalkorDB. Separate bounded real ChatGPT/Pi checks verified public research, synthetic file actions, graph-grounded answers and the local voice pipeline; temporary test app data and graphs were removed. New BYOK provider inference and a live Gmail account are not claimed without credentials. Older UI scripts that assume disconnected setup must not target a connected owner; see [copy verification guidance](docs/ui-copy.md).
 
-Browser control opens a dedicated visible Chromium profile on this Mac. Manual login/takeover, observation, masked screenshot, bounded scrolling and review-gated navigation/click/fill/key/tab operations share the actual Pi Durable loop. No native computer-use API or full desktop control. See [setup, verification and network limitations](docs/browser.md) and [actual adapter contract](docs/browser-provider-contract.md). No live browser model calls or logins were performed.
+## Assets and project scope
 
-## Next milestones
-
-Gmail/Discord adapters and the Apps & actions setup/intake/review UI are implemented. Both remain disconnected until explicit user configuration. No live grants, mailbox ingestion, bot sessions or real sends have occurred. Immutable, expiring approvals and durable deduplication protect outbound actions. See [integration setup and limits](docs/integrations.md). Voice, background/proactive work, full memory edit/forget/export and account/multi-user support remain later work. This milestone is local-only and must not be published as a multi-user service.
-
-## Original landing interactions and assets
-
-The original landing customizer, localStorage, section navigation, illustrative conversation tabs, hero gaze/happy click/solid drag, keyboard activation and reduced-motion handling are preserved. The landing's future integrations remain labeled concepts.
-
-Original SVG/design; Lucide icons (ISC). DM Sans/Manrope via Google Fonts (SIL Open Font License), with system/Georgia fallbacks. No paid assets or services.
-
-## Product copy
-
-Follow [UI copy guidelines](docs/ui-copy.md) for user-facing text, consent and connection states.
-
-For copy-only verification of a connected workspace, build a secret-free copy in a separate directory, start it on unused port7351, and run `bun verification/ui-copy.mjs`. The script mocks every API and blocks outside requests. Run `bun test app/home/copy.test.ts` for field validation. The older workspace/integration/browser scripts assume a disconnected test instance and must not be run against a live connected owner.
-
-Model settings and activation: [model/reasoning behavior](docs/model-settings.md). Local database setup and explicit sync step: [local FalkorDB](docs/local-memory.md).
-
-Local checkpoint cadence and focused verification are recorded in [project workflow](AGENTS.md).
-
-Discord settings and opt-in secure token saving: [persistence and platform limits](docs/discord-persistence.md).
+Original SVG/design; Lucide icons (ISC); DM Sans/Manrope (SIL Open Font License) with system/Georgia fallbacks. No paid assets or hosted audio provider are needed. This is a local single-owner application, not a public multi-user service. Follow [project workflow](AGENTS.md) and [UI copy guidance](docs/ui-copy.md).
