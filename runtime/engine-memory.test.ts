@@ -111,3 +111,11 @@ test('browser-derived assistant output stays out of graph after stop and durable
   expect(engine.snapshot().messages.some(m=>m.text==='Synthetic browser-derived answer 2')).toBe(true);
  }finally{await engine.close();await rm(directory,{recursive:true,force:true});}
 },15000);
+
+
+test('an unmatched question never injects an unrelated generic memory batch',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'pebble-no-memory-fallback-'));const queries:string[]=[];let offered='';const models=createModels({authContext:{env:async()=>undefined,fileExists:async()=>false}}),base=openaiProvider();
+ models.setProvider({...base,auth:{apiKey:{name:'synthetic',resolve:async()=>({auth:{apiKey:'synthetic'}})}},streamSimple:(model,context)=>{offered=JSON.stringify(context.messages);const stream=createAssistantMessageEventStream();const message:AssistantMessage={role:'assistant',content:[{type:'text',text:'No matching memory.'}],provider:'openai',api:'openai-responses',model:model.id,usage:{input:0,output:0,cacheRead:0,cacheWrite:0,totalTokens:0,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}},stopReason:'stop',timestamp:Date.now()};queueMicrotask(()=>stream.push({type:'done',reason:'stop',message}));return stream;}});
+ const config={host:'synthetic.invalid',port:6379,tls:true,graph:'synthetic'};const engine=await Engine.open(directory,models,()=>new GraphMemory(config,async()=>({run:async(query,params)=>{if(query==='RETURN 1 AS ok')return [{ok:1}];if(query.startsWith('MATCH (f:Fact)-[:SUPPORTED_BY]')){queries.push(String(params.query));return params.query===''?[{id:'unrelated',text:'UNRELATED_PRIVATE_FIXTURE',sourceId:'s',sourceText:'UNRELATED_PRIVATE_FIXTURE',conversationId:'c',role:'user'}]:[];}return [];},close:async()=>{}})));
+ try{engine.saveProfile(defaultLook);await engine.setKey('synthetic-only-key');await engine.connectMemory(config);await engine.send('A question without matching memory.','synthetic-no-fallback');for(let i=0;i<100&&!engine.snapshot().messages.some(m=>m.text==='No matching memory.');i++)await Bun.sleep(10);expect(queries).toEqual(['A question without matching memory.']);expect(offered).not.toContain('UNRELATED_PRIVATE_FIXTURE');}finally{await engine.close();await rm(directory,{recursive:true,force:true});}
+});

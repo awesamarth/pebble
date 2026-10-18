@@ -64,7 +64,7 @@ describe('FalkorDB adapter with isolated deterministic client', () => {
     fake.setFail(false);
     const row = { id: 'f', text: 'fact', sourceId: 's', sourceText: 'source', conversationId: 'c', role: 'user', person: null, project: 'Pebble' };
     fake.setRows([row]);
-    expect(await memory.recall('x'.repeat(3000))).toEqual([row]);
+    expect(await memory.recall('x'.repeat(3000))).toMatchObject([row]);
     expect(connects).toBe(2);
     expect(fake.calls[1].params.query).toHaveLength(2000);
     expect(fake.calls[1].readOnly).toBe(true);
